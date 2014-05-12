@@ -1,0 +1,10 @@
+## Interface: 50400
+## Title: PM
+## Version: @project-version@
+## Notes: Managed private conversations.
+## Author: Lombra
+## SavedVariables: PMDB
+
+Core.lua
+Chat.lua
+Frame.lua
