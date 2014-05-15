@@ -307,6 +307,7 @@ inviteButton:SetScript("OnClick", function(self)
 end)
 
 local editbox = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
+PM.editbox = editbox
 editbox:SetHeight(20)
 editbox:SetPoint("LEFT", insetLeft, "RIGHT", 9, 0)
 editbox:SetPoint("BOTTOMRIGHT", -6, 5)
@@ -427,6 +428,7 @@ local function openChat(target, chatType)
 		end
 	end
 	PM:SelectChat(target, chatType)
+	PM:Show()
 	editbox:SetFocus()
 end
 
@@ -466,6 +468,10 @@ for functionName, hook in pairs(hooks) do
 end
 
 
+function PM:Show()
+	frame:Show()
+end
+
 function PM:SelectChat(target, chatType)
 	local tab = self:GetChat(target, chatType)
 	if tab == self:GetSelectedChat() then return end
@@ -480,9 +486,6 @@ function PM:SelectChat(target, chatType)
 	self:UpdateInfo()
 	self.db.selectedTarget = target
 	self.db.selectedType = chatType
-	if not frame:IsShown() then
-		frame:Show()
-	end
 	scrollFrame:Update()
 end
 

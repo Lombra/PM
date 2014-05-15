@@ -64,6 +64,7 @@ function f:ADDON_LOADED(addon)
 	tabs = self.db.chats
 	if self.db.shown then
 		PM:SelectChat(selectedTarget, self.db.selectedType)
+		PM:Show()
 	end
 	PMFrame:SetSize(self.db.width, self.db.height)
 	PMFrame:ClearAllPoints()
