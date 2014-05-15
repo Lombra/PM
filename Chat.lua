@@ -112,10 +112,10 @@ function PM:HandleChatEvent(event, ...)
 		return
 	end
 	-- if the target of the currently selected tab is not the sender of this PM, then select their tab
-	if self:GetSelectedChat() ~= tab and not editbox:HasFocus() then
+	if self:GetSelectedChat() ~= tab and not self.editbox:HasFocus() then
 		self:SelectChat(sender, chatCategory)
 	end
-	PMFrame:Show()
+	self:Show()
 	if messageType == "in" then
 		ChatEdit_SetLastTellTarget(sender, chatType)
 		PlaySound("TellMessage", "MASTER")
