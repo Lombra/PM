@@ -8,53 +8,45 @@ frame:SetToplevel(true)
 frame:EnableMouse(true)
 frame:SetMovable(true)
 frame:RegisterForDrag("LeftButton")
+frame:SetDontSavePosition(true)
 frame:SetScript("OnDragStart", frame.StartMoving)
 frame:SetScript("OnDragStop", function(self)
 	self:StopMovingOrSizing()
 	PM.db.point, PM.db.x, PM.db.y = select(3, self:GetPoint())
+end)
+frame:SetScript("OnShow", function(self)
+	PM:GetSelectedChat().unread = nil
+	PM:UpdateConversationList()
+	PM.db.shown = true
 end)
 frame:SetScript("OnHide", function(self)
 	self:StopMovingOrSizing()
 	PM.db.point, PM.db.x, PM.db.y = select(3, self:GetPoint())
 	PM.db.shown = nil
 end)
-frame:SetDontSavePosition(true)
 
 local insetLeft = CreateFrame("Frame", nil, frame, "InsetFrameTemplate")
 insetLeft:SetPoint("TOPLEFT", PANEL_INSET_LEFT_OFFSET, PANEL_INSET_TOP_OFFSET)
 insetLeft:SetPoint("BOTTOM", 0, PANEL_INSET_BOTTOM_OFFSET + 2)
 insetLeft:SetWidth(CONVERSATION_LIST_WIDTH)
 
--- local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
--- close:SetPoint("TOPRIGHT")
--- close:SetHitRectInsets()
-
--- local close = CreateFrame("Button", nil, f)
--- close:SetSize(10, 10)
--- close:SetPoint("TOPRIGHT", -3, -3)
--- close:SetScript("OnClick", function()
-	-- f:Hide()
--- end)
-
--- local n = close:CreateTexture()
--- n:SetAllPoints()
--- n:SetTexture([[Interface\FriendsFrame\UI-Toast-CloseButton-Up]])
--- n:SetTexCoord(5 / 16, 15 / 16, 1 / 16, 11 / 16)
--- close:SetNormalTexture(n)
-
 local function onClick(self)
 	PM:SelectChat(self.target, self.type)
 end
 
 local function onEnter(self)
-	self.icon:Hide()
 	self.close:Show()
+	self.flash:Stop()
 end
 
 local function onLeave(self)
 	if not self.close:IsMouseOver() then
 		self.close:Hide()
 		-- self.icon:Show()
+		local thread = PM:GetChat(self.target, self.type)
+		if thread ~= PM:GetSelectedChat() and thread.unread then
+			self.flash:Play()
+		end
 	end
 end
 
@@ -71,7 +63,7 @@ scrollFrame:SetScript("OnVerticalScroll", function(self, value)
 end)
 scrollFrame.buttons = {}
 scrollFrame.Update = function(self)
-	local size = #PM.db.chats
+	local size = #PM.db.activeThreads
 	FauxScrollFrame_Update(self, size, NUM_BUTTONS, BUTTON_HEIGHT)
 	
 	local offset = self.offset
@@ -79,14 +71,22 @@ scrollFrame.Update = function(self)
 	for line = 1, NUM_BUTTONS do
 		local button = self.buttons[line]
 		local lineplusoffset = line + offset
-		local chat = PM.db.chats[lineplusoffset]
+		local chat = PM.db.activeThreads[lineplusoffset]
 		if chat then
+			local chat = PM:GetChat(chat.target, chat.type)
 			button.text:SetText(chat.target and Ambiguate(chat.target, "none") or UNKNOWN)
 			local presenceID = chat.target and BNet_GetPresenceID(chat.target)
 			if chat == PM:GetSelectedChat() then
 				button:LockHighlight()
 			else
 				button:UnlockHighlight()
+			end
+			if (chat.unread and chat ~= PM:GetSelectedChat()) and not (button:IsMouseOver() or button.close:IsMouseOver()) then
+				if not button.flash:IsPlaying() then
+					button.flash:Play()
+				end
+			elseif button.flash:IsPlaying() then
+				button.flash:Stop()
 			end
 			if presenceID then
 				if not chat.targetID then
@@ -110,9 +110,9 @@ scrollFrame.Update = function(self)
 			button.icon:SetShown(presenceID ~= nil)
 			button.target = chat.target
 			button.type = chat.type
-			if button:IsMouseOver() or button.close:IsMouseOver() then
-				button.icon:Hide()
-			end
+			-- if button:IsMouseOver() or button.close:IsMouseOver() then
+				-- button.icon:Hide()
+			-- end
 		end
 		button:SetShown(chat ~= nil)
 	end
@@ -199,13 +199,27 @@ for i = 1, NUM_BUTTONS do
 		tab.close:SetScript(script, handler)
 	end
 	
+	local flash = tab:CreateTexture()
+	flash:SetAllPoints()
+	flash:SetTexture([[Interface\Buttons\UI-Listbox-Highlight2]])
+	flash:SetVertexColor(0.196, 0.388, 0.8)
+	flash:SetAlpha(0)
+	
+	tab.flash = flash:CreateAnimationGroup()
+	tab.flash:SetLooping("BOUNCE")
+	
+	local fade = tab.flash:CreateAnimation("Alpha")
+	fade:SetChange(1)
+	fade:SetDuration(0.8)
+	fade:SetSmoothing("OUT")
+	
 	scrollFrame.buttons[i] = tab
 end
 
-local chatPanel = CreateFrame("Frame", nil, frame)
-chatPanel:SetPoint("LEFT", scrollFrame, "RIGHT")
-chatPanel:SetPoint("TOPRIGHT")
-chatPanel:SetPoint("BOTTOMRIGHT")
+-- local chatPanel = CreateFrame("Frame", nil, frame)
+-- chatPanel:SetPoint("LEFT", scrollFrame, "RIGHT")
+-- chatPanel:SetPoint("TOPRIGHT")
+-- chatPanel:SetPoint("BOTTOMRIGHT")
 
 local infoPanel = CreateFrame("Frame", nil, frame)
 infoPanel:SetPoint("LEFT", insetLeft, "RIGHT", PANEL_INSET_LEFT_OFFSET, 0)
@@ -236,9 +250,10 @@ infoPanel:SetScript("OnEnter", function(self)
 	else
 		GameTooltip:AddLine(gameText)
 	end
-	for toonIndex = 2, BNGetNumFriendToons(BNGetFriendIndex(chat.targetID)) do
-		for i = 2, select("#", BNGetFriendToonInfo(BNGetFriendIndex(chat.targetID), toonIndex)) do
-			GameTooltip:AddLine(i..": "..tostring(select(i, BNGetFriendToonInfo(BNGetFriendIndex(chat.targetID), toonIndex))))
+	local friendIndex = BNGetFriendIndex(chat.targetID)
+	for toonIndex = 2, BNGetNumFriendToons(friendIndex) do
+		for i = 2, select("#", BNGetFriendToonInfo(friendIndex, toonIndex)) do
+			GameTooltip:AddLine(i..": "..tostring(select(i, BNGetFriendToonInfo(friendIndex, toonIndex))))
 		end
 	end
 	
@@ -254,57 +269,105 @@ infoPanel.target = infoPanel:CreateFontString(nil, nil, "GameFontHighlightLarge"
 infoPanel.target:SetPoint("LEFT", infoPanel.icon, "RIGHT", 8, 1)
 
 infoPanel.toon = infoPanel:CreateFontString(nil, nil, "GameFontHighlightSmallRight")
-infoPanel.toon:SetPoint("RIGHT", -32, 0)
+infoPanel.toon:SetPoint("BOTTOMLEFT", infoPanel.icon, "BOTTOMRIGHT", 8, -4)
 
-local inviteButton = CreateFrame("Button", nil, infoPanel)
-inviteButton:SetSize(24, 32)
-inviteButton:SetPoint("RIGHT")
-inviteButton:SetNormalTexture([[Interface\FriendsFrame\TravelPass-Invite]])
-inviteButton:GetNormalTexture():SetTexCoord(0.01562500, 0.39062500, 0.27343750, 0.52343750)
-inviteButton:SetPushedTexture([[Interface\FriendsFrame\TravelPass-Invite]])
-inviteButton:GetPushedTexture():SetTexCoord(0.42187500, 0.79687500, 0.27343750, 0.52343750)
-inviteButton:SetDisabledTexture([[Interface\FriendsFrame\TravelPass-Invite]])
-inviteButton:GetDisabledTexture():SetTexCoord(0.01562500, 0.39062500, 0.00781250, 0.25781250)
-inviteButton:SetHighlightTexture([[Interface\FriendsFrame\TravelPass-Invite]])
-inviteButton:GetHighlightTexture():SetTexCoord(0.42187500, 0.79687500, 0.00781250, 0.25781250)
-inviteButton:SetScript("OnClick", function(self)
-	-- LE_PARTY_CATEGORY_HOME
-	local chat = PM:GetSelectedChat()
-	if chat.type == "WHISPER" then
-		InviteUnit(chat.target)
-	else
-		local index = BNGetFriendIndex(chat.targetID)
-		local numToons = BNGetNumFriendToons(index)
-		if numToons > 1 then
-			local numValidToons = 0
-			local lastToonID
-			for i = 1, numToons do
-				local _, _, client, _, realmID, faction, race, class, _, _, level, _, _, _, _, toonID = BNGetFriendToonInfo(index, i)
-				if client == BNET_CLIENT_WOW and faction == playerFactionGroup and realmID ~= 0 then
-					numValidToons = numValidToons + 1
-					lastToonID = toonID
+local function invite(self, target)
+	InviteUnit(Ambiguate(target, "none"))
+end
+
+local function inviteBNet(self, target)
+	BNInviteFriend(target)
+end
+
+local function openArchive(self, target, chatType)
+	PM:SelectArchive(target, chatType)
+	PMArchiveFrame:Show()
+end
+
+local menuButton = CreateFrame("Button", nil, infoPanel)
+menuButton:SetSize(32, 32)
+menuButton:SetPoint("RIGHT")
+menuButton:SetNormalTexture([[Interface\ChatFrame\UI-ChatIcon-ScrollDown-Up]])
+menuButton:SetPushedTexture([[Interface\ChatFrame\UI-ChatIcon-ScrollDown-Down]])
+menuButton:SetDisabledTexture([[Interface\ChatFrame\UI-ChatIcon-ScrollDown-Disabled]])
+menuButton:SetHighlightTexture([[Interface\Buttons\UI-Common-MouseHilight]])
+menuButton:SetScript("OnClick", function(self)
+	self.menu:Toggle(PM:GetSelectedChat())
+end)
+
+menuButton.menu = PM:CreateDropdown("Menu")
+menuButton.menu.relativeTo = menuButton
+menuButton.menu.xOffset = 0
+menuButton.menu.yOffset = 0
+menuButton.menu.initialize = function(self, level)
+	if level == 1 then
+		local thread = UIDROPDOWNMENU_MENU_VALUE
+		local info = UIDropDownMenu_CreateInfo()
+		info.text = "Invite"
+		info.value = thread.target
+		if thread.type == "WHISPER" then
+			info.func = invite
+			info.arg1 = thread.target
+		else
+			-- if more than 1 invitable toon, then make a submenu here, otherwise invite directly
+			local index = BNGetFriendIndex(thread.targetID)
+			local numToons = BNGetNumFriendToons(index)
+			if numToons > 1 then
+				local numValidToons = 0
+				local lastToonID
+				for i = 1, numToons do
+					local _, _, client, _, realmID, faction, _, _, _, _, _, _, _, _, _, toonID = BNGetFriendToonInfo(index, i)
+					if client == BNET_CLIENT_WOW and faction == playerFactionGroup and realmID ~= 0 then
+						numValidToons = numValidToons + 1
+						lastToonID = toonID
+					end
+				end
+				if numValidToons > 1 then
+					info.hasArrow = true
+				elseif numValidToons == 1 then
+					info.func = inviteBNet
+					info.arg1 = lastToonID
+				else
+					info.disabled = true
+				end
+			else
+				local presenceID, presenceName, _, _, toonName, toonID = BNGetFriendInfo(index)
+				if toonID then
+					info.func = inviteBNet
+					info.arg1 = toonID
+				else
+					info.disabled = true
 				end
 			end
-			if numValidToons == 1 then
-				BNInviteFriend(lastToonID)
-				return
-			end
-
-			PlaySound("igMainMenuOptionCheckBoxOn")
-			local dropdown = TravelPassDropDown
-			if dropdown.index ~= index then
-				CloseDropDownMenus()
-			end
-			dropdown.index = index
-			ToggleDropDownMenu(1, nil, dropdown, self, 20, 34)
-		else
-			local presenceID, presenceName, battleTag, isBattleTagPresence, toonName, toonID = BNGetFriendInfo(index)
-			if toonID then
-				BNInviteFriend(toonID)
-			end
-		end	
+		end
+		info.notCheckable = true
+		self:AddButton(info, level)
+		
+		local info = UIDropDownMenu_CreateInfo()
+		info.text = "View archive"
+		info.func = openArchive
+		info.arg1 = thread.target
+		info.arg2 = thread.type
+		info.notCheckable = true
+		self:AddButton(info, level)
 	end
-end)
+	if level == 2 then
+		-- LE_PARTY_CATEGORY_HOME
+		-- list all invitable toons
+		local index = BNGetFriendIndex(UIDROPDOWNMENU_MENU_VALUE)
+		for i = 1, BNGetNumFriendToons(index) do
+			local _, _, client, _, realmID, faction, _, _, _, _, _, _, _, _, _, toonID = BNGetFriendToonInfo(index, i)
+			if client == BNET_CLIENT_WOW and faction == playerFactionGroup and realmID ~= 0 then
+				local info = UIDropDownMenu_CreateInfo()
+				info.text = toonName
+				info.func = inviteBNet
+				info.arg1 = toonID
+				info.notCheckable = true
+				self:AddButton(info, level)
+			end
+		end
+	end
+end
 
 local editbox = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
 PM.editbox = editbox
@@ -384,16 +447,24 @@ chatLog:SetJustifyH("LEFT")
 chatLog:SetFading(false)
 chatLog:SetIndentedWordWrap(true)
 -- chatLog:SetToplevel(true)
-frame:SetScript("OnShow", function(self)
-	chatLog:SetFrameLevel(self:GetFrameLevel() + 1)
-	PM.db.shown = true
-end)
 chatLog:SetScript("OnHyperlinkClick", ChatFrame_OnHyperlinkShow)
 chatLog:SetScript("OnMouseWheel", function(self, delta)
 	if delta > 0 then
-		self:ScrollUp()
+		if IsShiftKeyDown() then
+			self:PageUp()
+		else
+			self:ScrollUp()
+		end
 	else
-		self:ScrollDown()
+		if IsShiftKeyDown() then
+			self:PageDown()
+		else
+			self:ScrollDown()
+		end
+	end
+	self.scrollToBottom:SetShown(not self:AtBottom())
+	if self:AtBottom() then
+		self.scrollToBottom.flash:Hide()
 	end
 end)
 
@@ -401,11 +472,11 @@ local linkTypes = {
 	achievement = true,
 	enchant = true,
 	glyph = true,
+	instancelock = true,
 	item = true,
 	quest = true,
 	spell = true,
 	talent = true,
-	instancelock = true,
 }
 
 chatLog:SetScript("OnHyperlinkEnter", function(self, link, ...)
@@ -419,13 +490,42 @@ end)
 
 chatLog:SetScript("OnHyperlinkLeave", GameTooltip_Hide)
 
+local scrollToBottomButton = CreateFrame("Button", nil, frame)
+scrollToBottomButton:SetSize(32, 32)
+scrollToBottomButton:SetPoint("BOTTOMRIGHT", chatLogInset)
+scrollToBottomButton:SetNormalTexture([[Interface\ChatFrame\UI-ChatIcon-ScrollEnd-Up]])
+scrollToBottomButton:SetPushedTexture([[Interface\ChatFrame\UI-ChatIcon-ScrollEnd-Down]])
+scrollToBottomButton:SetDisabledTexture([[Interface\ChatFrame\UI-ChatIcon-ScrollEnd-Disabled]])
+scrollToBottomButton:SetHighlightTexture([[Interface\Buttons\UI-Common-MouseHilight]])
+scrollToBottomButton:Hide()
+scrollToBottomButton:SetScript("OnClick", function(self, button)
+	chatLog:ScrollToBottom()
+	self:Hide()
+end)
+chatLog.scrollToBottom = scrollToBottomButton
+
+scrollToBottomButton.flash = scrollToBottomButton:CreateTexture(nil, "OVERLAY")
+scrollToBottomButton.flash:SetAllPoints()
+scrollToBottomButton.flash:Hide()
+scrollToBottomButton.flash:SetTexture([[Interface\ChatFrame\UI-ChatIcon-BlinkHilight]])
+
+
 local function openChat(target, chatType)
+	-- ChatFrame_SendSmartTell does not come with a chat type; figures out from target string
 	if not chatType then
 		if BNet_GetPresenceID(target) then
 			chatType = "BN_WHISPER"
 		else
 			chatType = "WHISPER"
 		end
+	end
+	if chatType == "WHISPER" and not target:match("%-") then
+		target = gsub(strlower(target), ".", strupper, 1).."-"..gsub(GetRealmName(), " ", "")
+	end
+	if PM:IsThreadActive(target, chatType) then
+		-- PM:OpenChat(target, chatType)
+	else
+		PM:CreateThread(target, chatType)
 	end
 	PM:SelectChat(target, chatType)
 	PM:Show()
@@ -468,9 +568,37 @@ for functionName, hook in pairs(hooks) do
 end
 
 
+-- WHISPER
+-- WHISPER_INFORM
+-- AFK
+-- DND
+-- BN_WHISPER
+-- BN_WHISPER_INFORM
+
+function PM:UPDATE_CHAT_COLOR(chatType, r, g, b)
+	local info = ChatTypeInfo[chatType]
+	-- if not info then print(chatType) return end
+	chatLog:UpdateColorByID(GetChatTypeIndex(chatType), r, g, b)
+end
+
 function PM:Show()
 	frame:Show()
 end
+
+function PM:UpdateConversationList()
+	scrollFrame:Update()
+end
+
+local function printThrottler(self, elapsed)
+	local message = self.currentTab.messages[self.messageThrottleIndex]
+	self:PrintMessage(self.currentTab, message.messageType, message.text, message.timestamp, message.active, true)
+	self.messageThrottleIndex = self.messageThrottleIndex - 1
+	if self.messageThrottleIndex == 0 then
+		self:RemoveOnUpdate()
+	end
+end
+
+local MAX_INSTANT_MESSAGES = 64
 
 function PM:SelectChat(target, chatType)
 	local tab = self:GetChat(target, chatType)
@@ -478,30 +606,50 @@ function PM:SelectChat(target, chatType)
 	self.selectedChat = tab
 	chatLog:Clear()
 	tab.lastTarget = nil
-	for i, message in ipairs(tab.messages) do
-		self:PrintMessage(tab, message.messageType, message.text, message.timestamp)
+	local numMessages = #tab.messages
+	-- printing too many messages at once causes a noticable screen freeze, so we apply throttling at a certain amount of messages
+	if numMessages > MAX_INSTANT_MESSAGES then
+		for i = numMessages - MAX_INSTANT_MESSAGES + 1, numMessages do
+			local message = tab.messages[i]
+			self:PrintMessage(tab, message.messageType, message.text, message.timestamp, message.active)
+		end
+		self.currentTab = tab
+		self.messageThrottleIndex = numMessages - MAX_INSTANT_MESSAGES
+		self:SetOnUpdate(printThrottler)
+	else
+		for i, message in ipairs(tab.messages) do
+			self:PrintMessage(tab, message.messageType, message.text, message.timestamp, message.active)
+		end
+		self:RemoveOnUpdate()
 	end
 	editbox:SetAttribute("chatType", chatType)
 	editbox:SetAttribute("tellTarget", target)
 	self:UpdateInfo()
 	self.db.selectedTarget = target
 	self.db.selectedType = chatType
-	scrollFrame:Update()
+	self:UpdateConversationList()
+	if frame:IsShown() then
+		tab.unread = nil
+	end
+	scrollToBottomButton:Hide()
 end
 
 local SENDER = "|cffffffff%s"
 
-function PM:PrintMessage(tab, messageType, message, timestamp)
+function PM:PrintMessage(tab, messageType, message, timestamp, isActive, addToTop)
 	local darken = 0.2
 	local color = ChatTypeInfo[tab.type]
 	local r, g, b = color.r, color.g, color.b
+	if not isActive then
+		r, g, b = 0.9, 0.9, 0.9
+	end
 	if messageType then
-		if messageType ~= tab.lastTarget then
+		-- if messageType ~= tab.lastTarget then
 			local color = HIGHLIGHT_FONT_COLOR
-			local r, g, b = color.r, color.g, color.b
-			if messageType == "out" then
-				r, g, b = r - darken, g - darken, b - darken
-			end
+			-- local r, g, b = color.r, color.g, color.b
+			-- if messageType == "out" then
+				-- r, g, b = r - darken, g - darken, b - darken
+			-- end
 			local message2
 			if messageType == "out" then
 				message2 = format(SENDER, "You")
@@ -518,6 +666,7 @@ function PM:PrintMessage(tab, messageType, message, timestamp)
 						message2 = SENDER
 					end
 				else
+					name = Ambiguate(name, "none")
 					if tab.targetID then
 						local localizedClass, englishClass, localizedRace, englishRace, sex = GetPlayerInfoByGUID(tab.targetID)
 						if englishClass then
@@ -527,14 +676,14 @@ function PM:PrintMessage(tab, messageType, message, timestamp)
 							end
 						end
 					end
-					message2 = format(SENDER, format("|Hplayer:%s|h%s|h", tab.target, name))
+					message2 = format(SENDER, format("|Hplayer:%s|h%s|h", Ambiguate(tab.target, "none"), name))
 				end
 			end
 			message = message2..":|r "..message
 			-- chatLog:AddMessage(message, r, g, b)
-		else
-			message = "  "..message
-		end
+		-- else
+			-- message = "  "..message
+		-- end
 		if messageType == "out" then
 			r, g, b = r - darken, g - darken, b - darken
 		end
@@ -545,23 +694,8 @@ function PM:PrintMessage(tab, messageType, message, timestamp)
 	end
 	tab.lastTarget = messageType
 	local t = date("*t", timestamp)
-	chatLog:AddMessage(format("|cffd0d0d0%02d:%02d|r %s", t.hour, t.min, message), r, g, b)
-end
-
-function PM:NewChat(target, chatType, isGM)
-	local chat = {}
-	chat.target = target
-	chat.type = chatType
-	chat.isGM = isGM
-	if chatType == "BN_WHISPER" then
-		local presenceID = BNet_GetPresenceID(target)
-		local presenceID, presenceName, battleTag, isBattleTagPresence = BNGetFriendInfoByID(presenceID)
-		chat.battleTag = battleTag
-	end
-	chat.messages = {}
-	tinsert(self.db.chats, chat)
-	scrollFrame:Update()
-	return chat
+	chatLog:AddMessage(format("|cffd0d0d0%02d:%02d|r %s", t.hour, t.min, message), r, g, b, GetChatTypeIndex(tab.type), addToTop)
+	scrollToBottomButton.flash:SetShown(not chatLog:AtBottom())
 end
 
 function PM:UpdateInfo()
@@ -612,4 +746,13 @@ function PM:UpdateInfo()
 	infoPanel.icon:SetTexture(texture)
 	infoPanel.target:SetText(name or Ambiguate(selectedTab.target, "none"))
 	infoPanel.toon:SetText(info)
+end
+
+function PM:OpenArchive(target, chatType)
+	selectedLog = target
+	selectedLogType = chatType
+	printLog()
+	-- archive:UpdateScrollChildRect()
+	menu:SetText(Ambiguate(target, "none"))
+	archive:Show()
 end
