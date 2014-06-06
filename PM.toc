@@ -5,6 +5,9 @@
 ## Author: Lombra
 ## SavedVariables: PMDB
 
+Libs\Libra\Libra.xml
+
 Core.lua
 Chat.lua
 Frame.lua
+Archive.lua

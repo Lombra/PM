@@ -102,12 +102,18 @@ function PM:HandleChatEvent(event, ...)
 	end
 	local chatType = event:sub(10)
 	local chatCategory = Chat_GetChatCategory(chatType)
-	sender = Ambiguate(sender, "none")
-	local tab = self:GetChat(sender, chatCategory, nil, flags == "GM" or nil)
+	if chatCategory == "WHISPER" and not sender:match("%-") then
+		sender = sender.."-"..gsub(GetRealmName(), " ", "")
+	end
+	local tab = self:GetChat(sender, chatCategory) or self:CreateThread(sender, chatCategory, flags == "GM" or nil)
 	tab.targetID = getID[chatCategory](...)
 	local messageType = chatEvents[event]
 	local hours, minutes = GetGameTime()
-	self:SaveMessage(tab, messageType, message)
+	if messageType == "in" and not (PMFrame:IsShown() and tab == self:GetSelectedChat()) then
+		tab.unread = true
+		self:UpdateConversationList()
+	end
+	self:SaveMessage(sender, chatCategory, messageType, message)
 	if PM:ShouldSuppress() then
 		return
 	end
@@ -123,17 +129,20 @@ function PM:HandleChatEvent(event, ...)
 	end
 end
 
-function PM:SaveMessage(chat, messageType, message)
-	tinsert(chat.messages, {
+function PM:SaveMessage(target, chatType, messageType, message)
+	tinsert(self:GetChat(target, chatType).messages, {
 		messageType = messageType,
 		text = message,
 		timestamp = time(),
 		-- from = sender,
 		-- fromGUID = guid,
+		active = true,
+		unread = true,
 	})
+	local chat = self:GetChat(target, chatType)
 	local cTab = self:GetSelectedChat()
 	if cTab == chat then
-		self:PrintMessage(chat, messageType, message, time())
+		self:PrintMessage(chat, messageType, message, time(), true)
 	end
 end
 
