@@ -36,9 +36,9 @@ local defaults = {
 	activeThreads = {},
 	threads = {},
 	
-	clearEditboxOnSend = true,
-	clearEditboxOnEscape = true,
-	editboxPerThread = true,
+	clearEditboxFocusOnSend = true,
+	clearEditboxOnFocusLost = true,
+	editboxTextPerThread = true,
 }
 
 function PM:OnInitialize()
@@ -51,11 +51,13 @@ function PM:OnInitialize()
 	PMFrame:SetShown(self.db.shown)
 	
 	self:UpdatePresences()
+	self:LoadSettings()
 	
 	-- print("BNIsSelf:", BNIsSelf(BNGetInfo()))
 	
 	-- self:RegisterEvent("PLAYER_LOGIN")
 	self:RegisterEvent("PLAYER_ENTERING_WORLD")
+	-- self:RegisterEvent("PLAYER_LOGOUT")
 	self:RegisterEvent("UPDATE_CHAT_COLOR")
 	-- self:RegisterEvent("BN_INFO_CHANGED")
 	self:RegisterEvent("BN_FRIEND_INFO_CHANGED")
@@ -83,6 +85,18 @@ function PM:PLAYER_ENTERING_WORLD()
 		PM:SelectChat(self.db.selectedTarget, self.db.selectedType)
 	end
 	self:UnregisterEvent("PLAYER_ENTERING_WORLD")
+end
+
+function PM:PLAYER_LOGOUT()
+	local now = time()
+	for i, thread in ipairs(self.db.threads) do
+		local messages = thread.messages
+		for i = #messages, 1, -1 do
+			if (now - messages.timestamp) < self.db.archiveAgeThreshold[thread.type] then
+				tremove(messages, i)
+			end
+		end
+	end
 end
 
 function PM:BN_FRIEND_LIST_SIZE_CHANGED()
@@ -275,7 +289,7 @@ function PM:CloseChat(target, chatType)
 			tremove(tabs, i)
 			local chat = self:GetChat(target, chatType)
 			if #tabs == 0 then
-				f:Hide()
+				PMFrame:Hide()
 			elseif chat == self:GetSelectedChat() then
 				local tab = tabs[i] or tabs[i - 1]
 				self:SelectChat(tab.target, tab.type)

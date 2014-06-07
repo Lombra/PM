@@ -405,7 +405,10 @@ editbox:SetScript("OnEnterPressed", function(self)
 		end
 	end
 	self:SetText("")
-	self:ClearFocus()
+	PM:GetSelectedChat().editboxText = nil
+	if PM.db.clearEditboxFocusOnSend then
+		self:ClearFocus()
+	end
 end)
 editbox:SetScript("OnEscapePressed", editbox.ClearFocus)
 editbox:SetScript("OnTabPressed", function(self)
@@ -424,7 +427,14 @@ editbox:SetScript("OnEditFocusGained", function(self)
 end)
 editbox:SetScript("OnEditFocusLost", function(self)
 	ACTIVE_CHAT_EDIT_BOX = nil
-	self:SetText("")
+	if PM.db.clearEditboxOnFocusLost then
+		self:SetText("")
+	end
+end)
+editbox:SetScript("OnTextChanged", function(self, isUserInput)
+	if isUserInput and PM.db.editboxTextPerThread then
+		PM:GetSelectedChat().editboxText = self:GetText()
+	end
 end)
 
 local chatLogInset = CreateFrame("Frame", nil, frame, "InsetFrameTemplate")
@@ -624,6 +634,9 @@ function PM:SelectChat(target, chatType)
 	end
 	editbox:SetAttribute("chatType", chatType)
 	editbox:SetAttribute("tellTarget", target)
+	if PM.db.editboxTextPerThread then
+		editbox:SetText(tab.editboxText or "")
+	end
 	self:UpdateInfo()
 	self.db.selectedTarget = target
 	self.db.selectedType = chatType
