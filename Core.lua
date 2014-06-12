@@ -33,12 +33,45 @@ local defaults = {
 	point = "RIGHT",
 	x = -128,
 	y = 0,
+	threadListWidth = 128,
+	
 	activeThreads = {},
 	threads = {},
+	
+	font = "Arial Narrow",
+	fontSize = 12,
+	
+	autoCleanArchive = {
+		WHISPER = true,
+		BN_WHISPER = true,
+	},
+	archiveKeep = {
+		WHISPER = 0,
+		BN_WHISPER = 7 * 24 * 3600,
+	},
+	
+	threadListWoWFriends = true,
+	threadListBNetFriends = true,
+	threadListShowOffline = false,
+	useDefaultColor = {
+		WHISPER = true,
+		BN_WHISPER = true,
+	},
+	color = {
+		WHISPER = {r = 1, g = 0.5, b = 1},
+		BN_WHISPER = {r = 1, g = 0.5, b = 1},
+	},
 	
 	clearEditboxFocusOnSend = true,
 	clearEditboxOnFocusLost = true,
 	editboxTextPerThread = true,
+	
+	defaultHandlerWhileSuppressed = true,
+	suppress = {
+		combat = false,
+		dnd = false,
+		encounter = false,
+	},
 }
 
 function PM:OnInitialize()
@@ -48,6 +81,9 @@ function PM:OnInitialize()
 	PMFrame:SetSize(self.db.width, self.db.height)
 	PMFrame:ClearAllPoints()
 	PMFrame:SetPoint(self.db.point or "RIGHT", self.db.x, self.db.y)
+	PM.threadListInset:SetWidth(self.db.threadListWidth)
+	self:CreateScrollButtons()
+	self:UpdateThreads()
 	PMFrame:SetShown(self.db.shown)
 	
 	self:UpdatePresences()
@@ -59,6 +95,7 @@ function PM:OnInitialize()
 	self:RegisterEvent("PLAYER_ENTERING_WORLD")
 	-- self:RegisterEvent("PLAYER_LOGOUT")
 	self:RegisterEvent("UPDATE_CHAT_COLOR")
+	self:RegisterEvent("FRIENDLIST_UPDATE")
 	-- self:RegisterEvent("BN_INFO_CHANGED")
 	self:RegisterEvent("BN_FRIEND_INFO_CHANGED")
 	self:RegisterEvent("BN_FRIEND_LIST_SIZE_CHANGED")
@@ -68,8 +105,8 @@ function PM:OnInitialize()
 	-- self:RegisterEvent("BN_SELF_OFFLINE")
 	-- self:RegisterEvent("BN_FRIEND_ACCOUNT_ONLINE")
 	-- self:RegisterEvent("BN_FRIEND_ACCOUNT_OFFLINE")
-	self:RegisterEvent("CHAT_MSG_AFK")
-	self:RegisterEvent("CHAT_MSG_DND")
+	-- self:RegisterEvent("CHAT_MSG_AFK")
+	-- self:RegisterEvent("CHAT_MSG_DND")
 	self:RegisterEvent("CHAT_MSG_BN_WHISPER_PLAYER_OFFLINE")
 end
 
@@ -89,14 +126,41 @@ end
 
 function PM:PLAYER_LOGOUT()
 	local now = time()
-	for i, thread in ipairs(self.db.threads) do
+	local threads = self.db.threads
+	for i = #threads, 1, -1 do
+		local thread = threads[i]
 		local messages = thread.messages
-		for i = #messages, 1, -1 do
-			if (now - messages.timestamp) < self.db.archiveAgeThreshold[thread.type] then
-				tremove(messages, i)
+		if self.db.autoCleanArchive[thread.type] then
+			for i = #messages, 1, -1 do
+				if not message.active and (now - messages.timestamp) > self.db.archiveKeep[thread.type] then
+					tremove(messages, i)
+				end
+			end
+			if #messages == 0 and not self:IsThreadActive(thread.target, thread.type) then
+				self:CloseChat(thread.target, thread.type)
+				self:DeleteThread(thread.target, thread.type)
 			end
 		end
 	end
+end
+
+function PM:GetFriendInfo(name)
+	for i = 1, GetNumFriends() do
+		local name2, level, class, area, connected, status = GetFriendInfo(i)
+		if name2 == name then
+			return true, connected, status, level, class, area
+		end
+	end
+end
+
+function PM:FRIENDLIST_UPDATE()
+	if self:GetSelectedChat() then
+		self:UpdateInfo()
+	end
+	self:UpdateThreads()
+	-- if self.db.threadListWoWFriends then
+		self:UpdateThreadList()
+	-- end
 end
 
 function PM:BN_FRIEND_LIST_SIZE_CHANGED()
@@ -111,7 +175,8 @@ function PM:BN_FRIEND_INFO_CHANGED(index)
 	if index and self:GetSelectedChat() and (BNGetFriendInfo(index) == self:GetSelectedChat().targetID) then
 		self:UpdateInfo()
 	end
-	self:UpdateConversationList()
+	self:UpdateThreads()
+	self:UpdateThreadList()
 end
 
 function PM:BN_CONNECTED(...)
@@ -211,12 +276,7 @@ function PM:UpdatePresences()
 	if lastTold then ChatEdit_SetLastToldTarget(lastTold, self.db.lastToldType) end
 end
 
-local _, CHAT_REALM = UnitFullName("player")
-
 function PM:CreateThread(target, chatType, isGM)
-	if chatType == "WHISPER" and not target:match("%-") then
-		target = gsub(strlower(target), ".", strupper, 1).."-"..CHAT_REALM
-	end
 	local chat = {
 		target = target,
 		type = chatType,
@@ -231,7 +291,7 @@ function PM:CreateThread(target, chatType, isGM)
 	if not self:GetChat(target, chatType) then
 		tinsert(self.db.threads, chat)
 	end
-	self:OpenChat(target, chatType)
+	self:ActivateThread(target, chatType)
 	return chat
 end
 
@@ -260,7 +320,7 @@ function PM:IsThreadActive(target, chatType)
 	end
 end
 
-function PM:OpenChat(target, chatType)
+function PM:ActivateThread(target, chatType)
 	if chatType == "WHISPER" and not target:match("%-") then
 		target = gsub(strlower(target), ".", strupper, 1).."-"..gsub(GetRealmName(), " ", "")
 	end
@@ -275,32 +335,39 @@ function PM:OpenChat(target, chatType)
 		chat.battleTag = battleTag
 	end
 	tinsert(self.db.activeThreads, chat)
+	self:UpdateThreads()
 	return chat
 end
 
 function PM:CloseChat(target, chatType)
-	local tabs = self.db.activeThreads
-	for i, thread in ipairs(tabs) do
+	local activeThreads = self.db.activeThreads
+	for i, thread in ipairs(activeThreads) do
 		if thread.target == target and thread.type == chatType then
 			local lastTold, lastToldType = ChatEdit_GetLastToldTarget()
 			if lastTold == target and lastToldType == chatType then
 				ChatEdit_SetLastToldTarget(nil, nil)
 			end
-			tremove(tabs, i)
+			tremove(activeThreads, i)
 			local chat = self:GetChat(target, chatType)
-			if #tabs == 0 then
+			if #activeThreads == 0 then
 				PMFrame:Hide()
 			elseif chat == self:GetSelectedChat() then
-				local tab = tabs[i] or tabs[i - 1]
+				local tab = activeThreads[i] or activeThreads[i - 1]
 				self:SelectChat(tab.target, tab.type)
 			end
-			-- archive all messages
-			for i = #chat.messages, 1, -1 do
-				local message = chat.messages[i]
-				if not message.active then break end
-				message.active = nil
+			-- if this thread type is set to instantly delete, then do that here, or if no messages were sent
+			if #chat.messages == 0 or (self.db.autoCleanArchive[thread.type] and self.db.archiveKeep[thread.type] == 0) then
+				self:DeleteThread(target, chatType)
+			else
+				-- these messages are no longer part of the active thread session
+				for i = #chat.messages, 1, -1 do
+					local message = chat.messages[i]
+					if not message.active then break end
+					message.active = nil
+				end
 			end
-			self:UpdateConversationList()
+			self:UpdateThreads()
+			self:UpdateThreadList()
 			break
 		end
 	end
