@@ -1,7 +1,7 @@
 local _, PM = ...
 local LSM = LibStub("LibSharedMedia-3.0")
 
--- LSM:Register("font", "Tahoma", [[Interface\AddOns\GeneralPurpose\media\tahoma.ttf]])
+LSM:Register("font", "Tahoma", [[Interface\AddOns\GeneralPurpose\media\tahoma.ttf]])
 
 local frame = PM:CreateOptionsFrame("PM")
 
@@ -12,70 +12,6 @@ end
 SLASH_PM1 = "/pm"
 
 local options = {
-	{
-		type = "CheckButton",
-		label = "Auto delete WoW archives",
-		-- tooltipText = "",
-		key = "autoDeleteArchiveWoW",
-		set = function(self, value)
-			PM.db.autoCleanArchive.WHISPER = value
-		end,
-		get = function(self)
-			return PM.db.autoCleanArchive.WHISPER
-		end,
-	},
-	{
-		type = "Dropdown",
-		label = "Keep WoW messages for:",
-		-- tooltipText = "",
-		initialize = function(self)
-			local DAY = 24 * 3600
-			for i = 0, 7 do
-				local info = UIDropDownMenu_CreateInfo()
-				info.text = SecondsToTime(i * DAY)
-				info.func = self.set
-				info.arg1 = i * DAY
-				info.checked = (v == PM.db.archiveKeep.WHISPER)
-				self:AddButton(info)
-			end
-		end,
-		set = function(self, time) PM.db.archiveKeep.WHISPER = time end,
-		get = function() return PM.db.archiveKeep.WHISPER end,
-		func = function(self, value) self:SetText(SecondsToTime(value)) end,
-		disabled = function() return not PM.db.autoCleanArchive.WHISPER end,
-	},
-	{
-		type = "CheckButton",
-		label = "Auto delete Battle.net archives",
-		-- tooltipText = "",
-		key = "autoDeleteArchiveBNet",
-		set = function(self, value)
-			PM.db.autoCleanArchive.BN_WHISPER = value
-		end,
-		get = function(self)
-			return PM.db.autoCleanArchive.BN_WHISPER
-		end,
-	},
-	{
-		type = "Dropdown",
-		label = "Keep Battle.net messages for:",
-		-- tooltipText = "",
-		initialize = function(self)
-			local DAY = 24 * 3600
-			for i = 0, 7 do
-				local info = UIDropDownMenu_CreateInfo()
-				info.text = SecondsToTime(i * DAY)
-				info.func = self.set
-				info.arg1 = i * DAY
-				info.checked = (v == PM.db.archiveKeep.BN_WHISPER)
-				self:AddButton(info)
-			end
-		end,
-		set = function(self, time) PM.db.archiveKeep.BN_WHISPER = time end,
-		get = function() return PM.db.archiveKeep.BN_WHISPER end,
-		func = function(self, value) self:SetText(SecondsToTime(value)) end,
-		disabled = function() return not PM.db.autoCleanArchive.BN_WHISPER end,
-	},
 }
 
 -- frame:SetDescription("Hello")
@@ -123,7 +59,6 @@ local optionsA = {
 		key = "threadListWoWFriends",
 		func = function()
 			PM:UpdateThreads()
-			PM:UpdateThreadList()
 		end,
 	},
 	{
@@ -133,7 +68,6 @@ local optionsA = {
 		key = "threadListBNetFriends",
 		func = function()
 			PM:UpdateThreads()
-			PM:UpdateThreadList()
 		end,
 	},
 	{
@@ -143,7 +77,6 @@ local optionsA = {
 		key = "threadListShowOffline",
 		func = function()
 			PM:UpdateThreads()
-			PM:UpdateThreadList()
 		end,
 	},
 	{
@@ -223,6 +156,8 @@ local optionsA = {
 		step = 1,
 		func = function(self, value)
 			PMFrame:SetHeight(value)
+			PM:CreateScrollButtons()
+			PM:UpdateThreadList()
 		end,
 	},
 	{
@@ -304,6 +239,73 @@ local optionsB = {
 }
 
 optionsBehaviour:CreateOptions(optionsB)
+
+frame:AddSubCategory("Archive"):CreateOptions({
+	{
+		type = "CheckButton",
+		label = "Auto delete WoW archives",
+		-- tooltipText = "",
+		key = "autoDeleteArchiveWoW",
+		set = function(self, value)
+			PM.db.autoCleanArchive.WHISPER = value
+		end,
+		get = function(self)
+			return PM.db.autoCleanArchive.WHISPER
+		end,
+	},
+	{
+		type = "Dropdown",
+		label = "Keep WoW messages for:",
+		-- tooltipText = "",
+		initialize = function(self)
+			local DAY = 24 * 3600
+			for i = 0, 7 do
+				local info = UIDropDownMenu_CreateInfo()
+				info.text = SecondsToTime(i * DAY)
+				info.func = self.set
+				info.arg1 = i * DAY
+				info.checked = (v == PM.db.archiveKeep.WHISPER)
+				self:AddButton(info)
+			end
+		end,
+		set = function(self, time) PM.db.archiveKeep.WHISPER = time end,
+		get = function() return PM.db.archiveKeep.WHISPER end,
+		func = function(self, value) self:SetText(SecondsToTime(value)) end,
+		disabled = function() return not PM.db.autoCleanArchive.WHISPER end,
+	},
+	{
+		type = "CheckButton",
+		label = "Auto delete Battle.net archives",
+		-- tooltipText = "",
+		key = "autoDeleteArchiveBNet",
+		set = function(self, value)
+			PM.db.autoCleanArchive.BN_WHISPER = value
+		end,
+		get = function(self)
+			return PM.db.autoCleanArchive.BN_WHISPER
+		end,
+	},
+	{
+		type = "Dropdown",
+		label = "Keep Battle.net messages for:",
+		-- tooltipText = "",
+		initialize = function(self)
+			local DAY = 24 * 3600
+			for i = 0, 7 do
+				local info = UIDropDownMenu_CreateInfo()
+				info.text = SecondsToTime(i * DAY)
+				info.func = self.set
+				info.arg1 = i * DAY
+				info.checked = (v == PM.db.archiveKeep.BN_WHISPER)
+				self:AddButton(info)
+			end
+		end,
+		set = function(self, time) PM.db.archiveKeep.BN_WHISPER = time end,
+		get = function() return PM.db.archiveKeep.BN_WHISPER end,
+		func = function(self, value) self:SetText(SecondsToTime(value)) end,
+		disabled = function() return not PM.db.autoCleanArchive.BN_WHISPER end,
+	},
+})
 
 function PM:LoadSettings()
 	frame:SetDatabase(self.db)
