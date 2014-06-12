@@ -34,10 +34,11 @@ local SEPARATOR_HEIGHT = 9
 local all = {}
 
 local function onClick(self)
-	if not PM:IsThreadActive(self.target, self.type) then
-		PM:CreateThread(self.target, self.type)
+	local target, type = self.target, self.type
+	if not PM:IsThreadActive(target, type) then
+		PM:CreateThread(target, type)
 	end
-	PM:SelectChat(self.target, self.type)
+	PM:SelectChat(target, type)
 end
 
 local function onEnter(self)
@@ -65,7 +66,8 @@ scrollFrame.buttons = {}
 local separator = scrollFrame:CreateTexture()
 separator:SetTexture([[Interface\FriendsFrame\UI-FriendsFrame-OnlineDivider]])
 separator:SetTexCoord(0, 1, 3/16, 0.75)
-scrollFrame.Update = function(self)
+scrollFrame.update = function(self)
+	self = scrollFrame
 	separator:Hide()
 	
 	local offset = self:GetOffset()
@@ -108,6 +110,7 @@ scrollFrame.Update = function(self)
 						button.flash:Stop()
 					end
 				else
+					button.close:Hide()
 				end
 				
 				if object.type == "WHISPER" then
@@ -166,7 +169,7 @@ scrollFrame.Update = function(self)
 		button:SetShown(object ~= nil)
 	end
 	
-	HybridScrollFrame_Update(self, (#all - 1) * BUTTON_HEIGHT + SEPARATOR_HEIGHT, #self.buttons * BUTTON_HEIGHT)
+	HybridScrollFrame_Update(self, (#all - 1) * self.buttonHeight + SEPARATOR_HEIGHT, #self.buttons * self.buttonHeight)
 end
 scrollFrame.createButton = function(self)
 	local tab = CreateFrame("Button", nil, self.scrollChild)
@@ -266,7 +269,7 @@ function PM:CreateScrollButtons()
 	for i = #scrollFrame.buttons + 1, numButtons do
 		local button = scrollFrame:createButton()
 		if i == 1 then
-			button:SetPoint("TOP", scrollFrame)
+			button:SetPoint("TOP")
 		else
 			button:SetPoint("TOP", scrollFrame.buttons[i - 1], "BOTTOM")
 		end
@@ -351,12 +354,8 @@ function PM:UpdateThreads()
 	else
 		HybridScrollFrame_CollapseButton(scrollFrame)
 	end
+	self:UpdateThreadList()
 end
-
--- local chatPanel = CreateFrame("Frame", nil, frame)
--- chatPanel:SetPoint("LEFT", scrollFrame, "RIGHT")
--- chatPanel:SetPoint("TOPRIGHT")
--- chatPanel:SetPoint("BOTTOMRIGHT")
 
 local infoPanel = CreateFrame("Frame", nil, frame)
 infoPanel:SetPoint("LEFT", insetLeft, "RIGHT", PANEL_INSET_LEFT_OFFSET, 0)
@@ -415,6 +414,17 @@ end
 local function inviteBNet(self, target)
 	BNInviteFriend(target)
 end
+
+-- local urlFormat = "http://%s.battle.net/wow/%s/character/%s/%s/advanced"
+
+-- local REGION = strlower(GetCVar("portal"))
+-- GetLocale()
+
+-- local function bnetProfile(self, target, chatType)
+	-- local name, realm = strsplit("-", target)
+	-- local url = format(urlFormat, REGION, "en", realm:gsub("(%l)(%U)", "%1-%2"):gsub(), name)
+	-- StaticPopup_Show("SHOW_URL", url:match("^%l+://([^/]+)"):gsub("^www%.", ""), nil, url)
+-- end
 
 local function openArchive(self, target, chatType)
 	PM:SelectArchive(target, chatType)
@@ -487,6 +497,15 @@ menuButton.menu.initialize = function(self, level)
 		info.arg2 = thread.type
 		info.notCheckable = true
 		self:AddButton(info, level)
+		
+		-- if thread.type == "WHISPER" then
+			-- local info = UIDropDownMenu_CreateInfo()
+			-- info.text = "Battle.net profile"
+			-- info.func = bnetProfile
+			-- info.arg1 = thread.target
+			-- info.notCheckable = true
+			-- self:AddButton(info, level)
+		-- end
 	end
 	if level == 2 then
 		-- LE_PARTY_CATEGORY_HOME
@@ -751,7 +770,7 @@ function PM:Show()
 end
 
 function PM:UpdateThreadList()
-	scrollFrame:Update()
+	scrollFrame:update()
 end
 
 local function printThrottler(self, elapsed)
@@ -783,6 +802,11 @@ function PM:SelectChat(target, chatType)
 		self:SetOnUpdate(printThrottler)
 	else
 		for i, message in ipairs(tab.messages) do
+			local previousMessage = tab.messages[i - 1]
+			if message.active and not (previousMessage and previousMessage.active) then
+				chatLog:AddMessage(" "..date("%Y-%m-%d", previousMessage.timestamp), 0.8, 0.8, 0.8)
+				chatLog:AddMessage(" ")
+			end
 			self:PrintMessage(tab, message.messageType, message.text, message.timestamp, message.active)
 		end
 		self:RemoveOnUpdate()

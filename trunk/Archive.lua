@@ -18,7 +18,7 @@ local function onClick(self, target, chatType)
 end
 
 local menu = PM:CreateDropdown("Frame", f)
--- menu:SetWidth(128)
+menu:SetWidth(128)
 menu:SetPoint("TOPLEFT", 0, -29)
 menu:JustifyText("LEFT")
 menu.initialize = function(self)
@@ -83,17 +83,19 @@ local function printLog()
 	end
 	local text = ""
 	for i, message in ipairs(thread.messages) do
-		local r, g, b = color.r, color.g, color.b
-		local sender
-		if message.messageType == "in" then
-			sender = target
-		else
-			-- sender = "|cffffffffYou|r"
-			sender = "You"
-			r, g, b = r - darken, g - darken, b - darken
+		if message.messageType then
+			local r, g, b = color.r, color.g, color.b
+			local sender
+			if message.messageType == "in" then
+				sender = target
+			else
+				-- sender = "|cffffffffYou|r"
+				sender = "You"
+				r, g, b = r - darken, g - darken, b - darken
+			end
+			
+			text = text..format("\n|cffd0d0d0%s|r |cff%.2x%.2x%.2x[%s|cff%.2x%.2x%.2x]: %s|r", date("%H:%M", message.timestamp), r * 255, g * 255, b * 255, sender, r * 255, g * 255, b * 255, message.text)
 		end
-		
-		text = text..format("\n|cffd0d0d0%s|r |cff%.2x%.2x%.2x[%s|cff%.2x%.2x%.2x]: %s|r", date("%H:%M", message.timestamp), r * 255, g * 255, b * 255, sender, r * 255, g * 255, b * 255, message.text)
 	end
 	archiveLog:SetText(strsub(text, 2))
 end
@@ -148,7 +150,7 @@ end)
 
 local purgeButton = CreateFrame("Button", "PMArchivePurgeButton", f, "UIMenuButtonStretchTemplate")
 purgeButton:SetWidth(64)
-purgeButton:SetPoint("RIGHT", searchBox, "LEFT", -8, 0)
+purgeButton:SetPoint("LEFT", menu, "RIGHT", -4, 2)
 purgeButton:SetText("Purge")
 purgeButton:SetScript("OnClick", function(self)
 	PM:CloseChat(selectedLog, selectedLogType)

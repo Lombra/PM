@@ -66,6 +66,9 @@ local function filter(frame)
 	return frame ~= PMFrame and not (PM:ShouldSuppress() and PM.db.defaultHandlerWhileSuppressed)
 end
 
+ChatFrame_AddMessageEventFilter("CHAT_MSG_AFK", filter)
+ChatFrame_AddMessageEventFilter("CHAT_MSG_DND", filter)
+
 for event in pairs(chatEvents) do
 	ChatFrame_AddMessageEventFilter(event, filter)
 	f:RegisterEvent(event)
@@ -106,6 +109,50 @@ function PM:HandleChatEvent(event, ...)
 		PlaySound("TellMessage", "MASTER")
 		-- PlaySoundFile([[Interface\AddOns\PM\Whisper.ogg]], "MASTER")
 	end
+end
+
+function PM:CHAT_MSG_AFK(...)
+	local filter, message, sender = messageEventFilter("CHAT_MSG_AFK", ...)
+	if filter then
+		return
+	end
+	if not sender:match("%-") then
+		sender = sender.."-"..gsub(GetRealmName(), " ", "")
+	end
+	-- if thread then
+		self:SaveMessage(sender, "WHISPER", nil, CHAT_AFK_GET..message)
+	-- end
+end
+
+function PM:CHAT_MSG_DND(...)
+	local filter, message, sender = messageEventFilter("CHAT_MSG_DND", ...)
+	if filter then
+		return
+	end
+	if sender:match("%-") then
+		sender = sender.."-"..gsub(GetRealmName(), " ", "")
+	end
+	-- if thread then
+		self:SaveMessage(sender, "WHISPER", nil, CHAT_DND_GET..message)
+	-- end
+end
+
+-- local ERR_CHAT_PLAYER_NOT_FOUND_S = "No player named '%s' is currently playing."
+local ERR_CHAT_PLAYER_NOT_FOUND_S = gsub(ERR_CHAT_PLAYER_NOT_FOUND_S, "%.", "%."):format("(.+)")
+
+function PM:CHAT_MSG_SYSTEM(...)
+	local filter, message = messageEventFilter("CHAT_MSG_SYSTEM", ...)
+	if filter then
+		return
+	end
+	local sender = strmatch(message, ERR_CHAT_PLAYER_NOT_FOUND_S)
+	if not sender then return end
+	if not sender:match("%-") then
+		sender = sender.."-"..gsub(GetRealmName(), " ", "")
+	end
+	-- if thread then
+		self:SaveMessage(sender, "WHISPER", nil, _G.ERR_CHAT_PLAYER_NOT_FOUND_S)
+	-- end
 end
 
 -- this function deterrmines whether chat messages should be sent to the addon or the default chat frame (true for send to chat frame)

@@ -105,9 +105,10 @@ function PM:OnInitialize()
 	-- self:RegisterEvent("BN_SELF_OFFLINE")
 	-- self:RegisterEvent("BN_FRIEND_ACCOUNT_ONLINE")
 	-- self:RegisterEvent("BN_FRIEND_ACCOUNT_OFFLINE")
-	-- self:RegisterEvent("CHAT_MSG_AFK")
-	-- self:RegisterEvent("CHAT_MSG_DND")
-	self:RegisterEvent("CHAT_MSG_BN_WHISPER_PLAYER_OFFLINE")
+	self:RegisterEvent("CHAT_MSG_AFK")
+	self:RegisterEvent("CHAT_MSG_DND")
+	self:RegisterEvent("CHAT_MSG_SYSTEM")
+	-- self:RegisterEvent("CHAT_MSG_BN_WHISPER_PLAYER_OFFLINE")
 end
 
 function PM:PLAYER_ENTERING_WORLD()
@@ -158,9 +159,6 @@ function PM:FRIENDLIST_UPDATE()
 		self:UpdateInfo()
 	end
 	self:UpdateThreads()
-	-- if self.db.threadListWoWFriends then
-		self:UpdateThreadList()
-	-- end
 end
 
 function PM:BN_FRIEND_LIST_SIZE_CHANGED()
@@ -176,7 +174,6 @@ function PM:BN_FRIEND_INFO_CHANGED(index)
 		self:UpdateInfo()
 	end
 	self:UpdateThreads()
-	self:UpdateThreadList()
 end
 
 function PM:BN_CONNECTED(...)
@@ -214,20 +211,6 @@ function PM:BN_FRIEND_ACCOUNT_OFFLINE(presenceID)
 end
 
 function PM:BN_TOON_NAME_UPDATED(id, toonName, dunno)
-end
-
-function PM:CHAT_MSG_AFK(message, sender)
-	local chat = self:GetChat(sender, "WHISPER", true)
-	if chat then
-		self:SaveMessage(chat, nil, CHAT_AFK_GET..message)
-	end
-end
-
-function PM:CHAT_MSG_DND(message, sender)
-	local chat = self:GetChat(sender, "WHISPER", true)
-	if chat then
-		self:SaveMessage(chat, nil, CHAT_DND_GET..message)
-	end
 end
 
 function PM:CHAT_MSG_BN_WHISPER_PLAYER_OFFLINE(message, sender, language, channelString, target, flags, _, _, channelName, _, _, guid, presenceID)
@@ -355,6 +338,12 @@ function PM:CloseChat(target, chatType)
 				local tab = activeThreads[i] or activeThreads[i - 1]
 				self:SelectChat(tab.target, tab.type)
 			end
+			for i = #chat.messages, 1, -1 do
+				local message = chat.messages[i]
+				if not message.messageType then
+					tremove(chat.messages, i)
+				end
+			end
 			-- if this thread type is set to instantly delete, then do that here, or if no messages were sent
 			if #chat.messages == 0 or (self.db.autoCleanArchive[thread.type] and self.db.archiveKeep[thread.type] == 0) then
 				self:DeleteThread(target, chatType)
@@ -367,7 +356,6 @@ function PM:CloseChat(target, chatType)
 				end
 			end
 			self:UpdateThreads()
-			self:UpdateThreadList()
 			break
 		end
 	end
