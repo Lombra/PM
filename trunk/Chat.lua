@@ -1,15 +1,5 @@
 local addonName, PM = ...
 
--- this function deterrmines whether chat messages should be sent to the addon or the default chat frame (true for send to chat frame)
-function PM:ShouldSuppress()
-	if PMFrame:IsShown() then
-		-- always send to addon if it's already shown
-		return false
-	end
-	return
-		UnitAffectingCombat("player")
-end
-
 local function messageEventFilter(event, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13, arg14)
 	local chatFilters = ChatFrame_GetMessageEventFilters(event)
 	if chatFilters then
@@ -69,16 +59,11 @@ local chatEvents = {
 
 local f = CreateFrame("Frame")
 f:SetScript("OnEvent", function(self, event, ...)
-	if chatEvents[event] then
-		PM:HandleChatEvent(event, ...)
-		return
-	end
-	
-	self[event](self, ...)
+	PM:HandleChatEvent(event, ...)
 end)
 
 local function filter(frame)
-	return frame ~= PMFrame and not PM:ShouldSuppress()
+	return frame ~= PMFrame and not (PM:ShouldSuppress() and PM.db.defaultHandlerWhileSuppressed)
 end
 
 for event in pairs(chatEvents) do
@@ -86,40 +71,34 @@ for event in pairs(chatEvents) do
 	f:RegisterEvent(event)
 end
 
-local getID = {
-	WHISPER = function(...)
-		return select(12, ...)
-	end,
-	BN_WHISPER = function(...)
-		return select(13, ...)
-	end,
-}
-
 function PM:HandleChatEvent(event, ...)
 	local filter, message, sender, language, channelString, target, flags, _, _, channelName, _, _, guid, presenceID = messageEventFilter(event, ...)
 	if filter then
 		return
 	end
-	local chatType = event:sub(10)
-	local chatCategory = Chat_GetChatCategory(chatType)
-	if chatCategory == "WHISPER" and not sender:match("%-") then
+	local chatType = Chat_GetChatCategory(event:sub(10))
+	if chatType == "WHISPER" and not sender:match("%-") then
 		sender = sender.."-"..gsub(GetRealmName(), " ", "")
 	end
-	local tab = self:GetChat(sender, chatCategory) or self:CreateThread(sender, chatCategory, flags == "GM" or nil)
-	tab.targetID = getID[chatCategory](...)
-	local messageType = chatEvents[event]
-	local hours, minutes = GetGameTime()
-	if messageType == "in" and not (PMFrame:IsShown() and tab == self:GetSelectedChat()) then
-		tab.unread = true
-		self:UpdateConversationList()
+	local thread = self:GetChat(sender, chatType) or self:CreateThread(sender, chatType, flags == "GM" or nil)
+	if chatType == "WHISPER" then
+		thread.targetID = guid
 	end
-	self:SaveMessage(sender, chatCategory, messageType, message)
+	if chatType == "BN_WHISPER" then
+		thread.targetID = presenceID
+	end
+	local messageType = chatEvents[event]
+	if messageType == "in" and not (PMFrame:IsShown() and thread == self:GetSelectedChat()) then
+		thread.unread = true
+		self:UpdateThreadList()
+	end
+	self:SaveMessage(sender, chatType, messageType, message)
 	if PM:ShouldSuppress() then
 		return
 	end
-	-- if the target of the currently selected tab is not the sender of this PM, then select their tab
-	if self:GetSelectedChat() ~= tab and not self.editbox:HasFocus() then
-		self:SelectChat(sender, chatCategory)
+	-- if the target of the currently selected thread is not the sender of this PM, then select their thread
+	if self:GetSelectedChat() ~= thread and not self.editbox:HasFocus() then
+		self:SelectChat(sender, chatType)
 	end
 	self:Show()
 	if messageType == "in" then
@@ -129,20 +108,29 @@ function PM:HandleChatEvent(event, ...)
 	end
 end
 
+-- this function deterrmines whether chat messages should be sent to the addon or the default chat frame (true for send to chat frame)
+function PM:ShouldSuppress()
+	if PMFrame:IsShown() then
+		-- always send to addon if it's already shown
+		return false
+	end
+	return
+		(self.db.suppress.combat and UnitAffectingCombat("player")) or
+		(self.db.suppress.dnd and IsChatDND()) or
+		(self.db.suppress.encounter and IsEncounterInProgress())
+end
+
 function PM:SaveMessage(target, chatType, messageType, message)
-	tinsert(self:GetChat(target, chatType).messages, {
+	local thread = self:GetChat(target, chatType)
+	tinsert(thread.messages, {
 		messageType = messageType,
 		text = message,
 		timestamp = time(),
 		-- from = sender,
-		-- fromGUID = guid,
 		active = true,
 		unread = true,
 	})
-	local chat = self:GetChat(target, chatType)
-	local cTab = self:GetSelectedChat()
-	if cTab == chat then
-		self:PrintMessage(chat, messageType, message, time(), true)
+	if thread == self:GetSelectedChat() then
+		self:PrintMessage(thread, messageType, message, time(), true)
 	end
 end
-
