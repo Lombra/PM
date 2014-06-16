@@ -1,5 +1,6 @@
 local addonName, PM = ...
 
+
 local frame = CreateFrame("Frame", "PMFrame", UIParent, "BasicFrameTemplate")
 frame.TitleText:SetText("PM")
 frame:SetToplevel(true)
@@ -23,13 +24,12 @@ frame:SetScript("OnHide", function(self)
 	PM.db.shown = nil
 end)
 
+
 local insetLeft = CreateFrame("Frame", nil, frame, "InsetFrameTemplate")
 insetLeft:SetPoint("TOPLEFT", PANEL_INSET_LEFT_OFFSET, PANEL_INSET_TOP_OFFSET)
 insetLeft:SetPoint("BOTTOM", 0, PANEL_INSET_BOTTOM_OFFSET + 2)
 PM.threadListInset = insetLeft
 
-local BUTTON_HEIGHT = 16
-local SEPARATOR_HEIGHT = 9
 
 local all = {}
 
@@ -44,28 +44,61 @@ end
 local function onEnter(self)
 	if PM:IsThreadActive(self.target, self.type) then
 		self.close:Show()
+		self.icon:Hide()
 		self.flash:Stop()
+		self.text:SetPoint("RIGHT", self.icon, "LEFT", -2, 0)
 	end
 end
 
 local function onLeave(self)
 	if PM:IsThreadActive(self.target, self.type) and not self.close:IsMouseOver() then
 		self.close:Hide()
-		-- self.icon:Show()
 		local thread = PM:GetChat(self.target, self.type)
-		if thread ~= PM:GetSelectedChat() and thread.unread then
+		if not self.selected and thread.unread then
 			self.flash:Play()
+		end
+		if self.type == "BN_WHISPER" then
+			self.icon:Show()
+		else
+			self.text:SetPoint("RIGHT", -2, 0)
+		end
+		if not self.selected then
+			self:UnlockHighlight()
 		end
 	end
 end
 
+local closeScripts = {
+	OnEnter = function(self)
+		self:SetAlpha(1.0)
+		self.parent:LockHighlight()
+	end,
+	OnLeave = function(self)
+		self:SetAlpha(0.5)
+		if not self.parent:IsMouseOver() then
+			onLeave(self.parent)
+		end
+	end,
+	OnClick = function(self)
+		PM:CloseChat(self.parent.target, self.parent.type)
+	end,
+	OnMouseDown = function(self)
+		self.texture:SetPoint("CENTER", 1, -1)
+	end,
+	OnMouseUp = function(self)
+		self.texture:SetPoint("CENTER", 0, 0)
+	end,
+}
+
 local scrollFrame = PM:CreateScrollFrame("Hybrid", insetLeft)
-scrollFrame:SetPoint("TOPRIGHT", -4, -4)
-scrollFrame:SetPoint("BOTTOMLEFT", 4, 4)
-scrollFrame.buttons = {}
+PM.scroll = scrollFrame
 local separator = scrollFrame:CreateTexture()
 separator:SetTexture([[Interface\FriendsFrame\UI-FriendsFrame-OnlineDivider]])
 separator:SetTexCoord(0, 1, 3/16, 0.75)
+scrollFrame:SetPoint("TOPRIGHT", -4, -4)
+scrollFrame:SetPoint("BOTTOMLEFT", 4, 4)
+scrollFrame:SetButtonHeight(16)
+scrollFrame:SetHeaderHeight(9)
 scrollFrame.update = function(self)
 	self = scrollFrame
 	separator:Hide()
@@ -78,7 +111,7 @@ scrollFrame.update = function(self)
 		local object = all[lineplusoffset]
 		if object then
 			if object.separator then
-				button:SetHeight(SEPARATOR_HEIGHT)
+				button:SetHeader()
 				button.text:SetText(nil)
 				button.close:Hide()
 				button.icon:Hide()
@@ -88,21 +121,25 @@ scrollFrame.update = function(self)
 				separator:SetAllPoints(button)
 				separator:Show()
 			else
-				button:SetHeight(BUTTON_HEIGHT)
+				button:ResetHeight()
 			end
 			button:SetEnabled(not object.separator)
+			button.text:SetPoint("RIGHT", -2, 0)
 			
 			if not object.separator then
 				local thread = PM:GetChat(object.target, object.type)
 				
-				if thread == PM:GetSelectedChat() then
+				local selectedThread = PM:GetSelectedChat()
+				if selectedThread and thread == selectedThread then
 					button:LockHighlight()
+					button.selected = true
 				else
 					button:UnlockHighlight()
+					button.selected = nil
 				end
 				
 				if PM:IsThreadActive(object.target, object.type) then
-					if (thread.unread and thread ~= PM:GetSelectedChat()) and not (button:IsMouseOver() or button.close:IsMouseOver()) then
+					if (thread.unread and thread ~= selectedThread) and not (button:IsMouseOver() or button.close:IsMouseOver()) then
 						if not button.flash:IsPlaying() then
 							button.flash:Play()
 						end
@@ -134,15 +171,16 @@ scrollFrame.update = function(self)
 				end
 				
 				if object.type == "BN_WHISPER" then
-					local presenceID = BNet_GetPresenceID(object.target)
+					local presenceID = object.target and BNet_GetPresenceID(object.target)
 					if presenceID then
 						button.text:SetText(object.target or UNKNOWN)
 						button.status:Show()
 						button.shadow:Show()
 						button.icon:Show()
-						if not thread.targetID then
-							thread.targetID = presenceID
-						end
+						button.text:SetPoint("RIGHT", button.icon, "LEFT", -2, 0)
+						-- if not thread.targetID then
+							-- thread.targetID = presenceID
+						-- end
 						local presenceID, presenceName, battleTag, isBattleTagPresence, toonName, _, client, isOnline, lastOnline, isAFK, isDND, messageText, noteText, _, broadcastTime = BNGetFriendInfoByID(presenceID)
 						-- local _, toonName, client, realmName, _, faction, race, class, _, zoneName, level, gameText = BNGetToonInfo(presenceID)
 						if isAFK then
@@ -161,21 +199,23 @@ scrollFrame.update = function(self)
 				-- button.active = true
 				button.target = object.target
 				button.type = object.type
-				-- if button:IsMouseOver() or button.close:IsMouseOver() then
-					-- button.icon:Hide()
-				-- end
+				if button:IsMouseOver() then
+					if PM:IsThreadActive(object.target, object.type) then--or button.close:IsMouseOver() then
+						button.icon:Hide()
+						button.text:SetPoint("RIGHT", button.icon, "LEFT", -2, 0)
+					else
+					end
+				end
 			end
 		end
 		button:SetShown(object ~= nil)
 	end
 	
-	HybridScrollFrame_Update(self, (#all - 1) * self.buttonHeight + SEPARATOR_HEIGHT, #self.buttons * self.buttonHeight)
+	HybridScrollFrame_Update(self, (#all - 1) * self.buttonHeight + self.headerHeight, #self.buttons * self.buttonHeight)
 end
 scrollFrame.createButton = function(self)
 	local tab = CreateFrame("Button", nil, self.scrollChild)
-	tab:SetHeight(BUTTON_HEIGHT)
-	tab:SetPoint("LEFT", self)
-	tab:SetPoint("RIGHT", self)
+	tab:SetPoint("RIGHT", self.scrollChild)
 	tab:SetScript("OnClick", onClick)
 	tab:SetScript("OnEnter", onEnter)
 	tab:SetScript("OnLeave", onLeave)
@@ -194,54 +234,25 @@ scrollFrame.createButton = function(self)
 	tab.status:SetPoint("LEFT")
 	tab.status:SetTexture([[Interface\AddOns\PM\Untitled-2]])
 	
+	tab.text = tab:CreateFontString(nil, nil, "GameFontHighlightSmall")
+	tab.text:SetPoint("LEFT", tab.status, "RIGHT")
+	tab.text:SetJustifyH("LEFT")
+	
 	tab.icon = tab:CreateTexture()
 	tab.icon:SetSize(16, 16)
 	tab.icon:SetPoint("RIGHT", -2, 0)
-	
-	tab.text = tab:CreateFontString(nil, nil, "GameFontHighlightSmall")
-	tab.text:SetPoint("LEFT", tab.status, "RIGHT")
-	tab.text:SetPoint("RIGHT", tab.icon, "LEFT", -2, 0)
-	tab.text:SetJustifyH("LEFT")
 	
 	tab.close = CreateFrame("Button", nil, tab)
 	tab.close:SetSize(16, 16)
 	tab.close:SetPoint("RIGHT", -2, 0)
 	tab.close:SetAlpha(0.5)
 	tab.close:Hide()
+	tab.close.parent = tab
 	
 	tab.close.texture = tab.close:CreateTexture()
 	tab.close.texture:SetSize(16, 16)
 	tab.close.texture:SetPoint("CENTER")
 	tab.close.texture:SetTexture([[Interface\FriendsFrame\ClearBroadcastIcon]])
-	
-	local closeScripts = {
-		OnShow = function(self)
-			tab.icon:Hide()
-			-- self:SetAlpha(1.0)
-		end,
-		OnHide = function(self)
-			tab.icon:Show()
-			-- self:SetAlpha(1.0)
-		end,
-		OnEnter = function(self)
-			self:SetAlpha(1.0)
-		end,
-		OnLeave = function(self)
-			self:SetAlpha(0.5)
-			if not tab:IsMouseOver() then
-				self:Hide()
-			end
-		end,
-		OnClick = function(self)
-			PM:CloseChat(tab.target, tab.type)
-		end,
-		OnMouseDown = function(self)
-			self.texture:SetPoint("CENTER", 1, -1)
-		end,
-		OnMouseUp = function(self)
-			self.texture:SetPoint("CENTER", 0, 0)
-		end,
-	}
 	
 	for script, handler in pairs(closeScripts) do
 		tab.close:SetScript(script, handler)
@@ -264,98 +275,10 @@ scrollFrame.createButton = function(self)
 	return tab
 end
 
-function PM:CreateScrollButtons()
-	local numButtons = ceil(scrollFrame:GetHeight() / BUTTON_HEIGHT) + 1
-	for i = #scrollFrame.buttons + 1, numButtons do
-		local button = scrollFrame:createButton()
-		if i == 1 then
-			button:SetPoint("TOP")
-		else
-			button:SetPoint("TOP", scrollFrame.buttons[i - 1], "BOTTOM")
-		end
-		scrollFrame.buttons[i] = button
-	end
-	HybridScrollFrame_CreateButtons(scrollFrame)
-end
 
-function PM:UpdateThreads()
-	wipe(all)
-	
-	for i, thread in ipairs(self.db.activeThreads) do
-		tinsert(all, thread)
-	end
-	
-	local numBNetTotal, numBNetOnline = BNGetNumFriends()
-	local numBNetOffline = numBNetTotal - numBNetOnline
-	local numWoWTotal, numWoWOnline = GetNumFriends()
-	local numWoWOffline = numWoWTotal - numWoWOnline
-	
-	if self.db.threadListBNetFriends then
-		for i = 1, numBNetOnline do
-			local presenceID, presenceName = BNGetFriendInfo(i)
-			if not self:IsThreadActive(presenceName, "BN_WHISPER") then
-				tinsert(all, {
-					target = presenceName,
-					type = "BN_WHISPER",
-				})
-			end
-		end
-	end
-	
-	if self.db.threadListWoWFriends then
-		for i = 1, numWoWOnline do
-			local name = GetFriendInfo(i)
-			if not name:match("%-") then
-				name = name.."-"..gsub(GetRealmName(), " ", "")
-			end
-			if not self:IsThreadActive(name, "WHISPER") then
-				tinsert(all, {
-					target = name,
-					type = "WHISPER",
-				})
-			end
-		end
-	end
-	
-	if self.db.threadListShowOffline then
-		if self.db.threadListBNetFriends then
-			for i = numBNetOnline + 1, numBNetTotal do
-				local presenceID, presenceName = BNGetFriendInfo(i)
-				if not self:IsThreadActive(presenceName, "BN_WHISPER") then
-					tinsert(all, {
-						target = presenceName,
-						type = "BN_WHISPER",
-					})
-				end
-			end
-		end
-		
-		if self.db.threadListWoWFriends then
-			for i = numWoWOnline + 1, numWoWTotal do
-				local name, level, class, area, connected = GetFriendInfo(i)
-				if not name:match("%-") then
-					name = name.."-"..gsub(GetRealmName(), " ", "")
-				end
-				if not self:IsThreadActive(name, "WHISPER") then
-					tinsert(all, {
-						target = name,
-						type = "WHISPER",
-					})
-				end
-			end
-		end
-	end
-	
-	local size = #PM.db.activeThreads
-	
-	if (size > 0) and (#all > size) then
-		tinsert(all, size + 1, {separator = true})
-		HybridScrollFrame_ExpandButton(scrollFrame, size * BUTTON_HEIGHT, SEPARATOR_HEIGHT)
-	else
-		HybridScrollFrame_CollapseButton(scrollFrame)
-	end
-	self:UpdateThreadList()
-end
+local reverseclassnames = {}
+for k,v in pairs(LOCALIZED_CLASS_NAMES_MALE) do reverseclassnames[v] = k end
+for k,v in pairs(LOCALIZED_CLASS_NAMES_FEMALE) do reverseclassnames[v] = k end
 
 local infoPanel = CreateFrame("Frame", nil, frame)
 infoPanel:SetPoint("LEFT", insetLeft, "RIGHT", PANEL_INSET_LEFT_OFFSET, 0)
@@ -364,32 +287,49 @@ infoPanel:SetHeight(32)
 
 infoPanel:EnableMouse(true)
 infoPanel:SetScript("OnEnter", function(self)
-	local chat = PM:GetSelectedChat()
-	if chat.type ~= "BN_WHISPER" then return end
+	local thread = PM:GetSelectedChat()
+	
+	if thread.type ~= "BN_WHISPER" then return end
+	
+	local presenceID, presenceName, battleTag, isBattleTagPresence, toonName, toonID, client, isOnline, lastOnline, isAFK, isDND, broadcastText, noteText, _, broadcastTime = BNGetFriendInfoByID(thread.targetID)
+	
+	if not isOnline then return end
 	
 	GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-	local presenceID, presenceName, battleTag, isBattleTagPresence, toonName, _, client, isOnline, lastOnline, isAFK, isDND, messageText, noteText, _, broadcastTime = BNGetFriendInfoByID(chat.targetID)
 	GameTooltip:AddLine(presenceName, HIGHLIGHT_FONT_COLOR.r, HIGHLIGHT_FONT_COLOR.g, HIGHLIGHT_FONT_COLOR.b)
 	GameTooltip:AddLine(battleTag)
-	GameTooltip:AddLine(messageText, nil, nil, nil, true)
+	GameTooltip:AddLine(broadcastText, nil, nil, nil, true)
 	GameTooltip:AddLine(noteText)
 	
-	local _, toonName, client, realmName, realmID, faction, race, class, _, zoneName, level, gameText = BNGetToonInfo(chat.targetID)
+	local _, toonName, _, realmName, realmID, faction, race, class, _, zoneName, level, gameText = BNGetToonInfo(toonID)
 	GameTooltip:AddLine(" ")
 	GameTooltip:AddLine(client)
-	GameTooltip:AddLine(toonName)
 	if client == BNET_CLIENT_WOW then
+		local color = (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[reverseclassnames[class]]
+		GameTooltip:AddLine(toonName, color.r, color.g, color.b)
 		GameTooltip:AddLine(format(TOOLTIP_UNIT_LEVEL_RACE_CLASS, level, race, class))
 		GameTooltip:AddLine(realmName)
 		GameTooltip:AddLine(faction)
 		GameTooltip:AddLine(zoneName)
 	else
+		GameTooltip:AddLine(toonName)
 		GameTooltip:AddLine(gameText)
 	end
-	local friendIndex = BNGetFriendIndex(chat.targetID)
-	for toonIndex = 2, BNGetNumFriendToons(friendIndex) do
-		for i = 2, select("#", BNGetFriendToonInfo(friendIndex, toonIndex)) do
-			GameTooltip:AddLine(i..": "..tostring(select(i, BNGetFriendToonInfo(friendIndex, toonIndex))))
+	local friendIndex = BNGetFriendIndex(thread.targetID)
+	for toonIndex = 1, BNGetNumFriendToons(friendIndex) do
+		local hasFocus, toonName, client, realmName, realmID, faction, race, class, guild, zoneName, level, gameText = BNGetFriendToonInfo(friendIndex, toonIndex)
+		if not hasFocus then
+			GameTooltip:AddLine(" ")
+			if client == BNET_CLIENT_WOW then
+				GameTooltip:AddLine(format(TOOLTIP_UNIT_LEVEL_RACE_CLASS, level, race, class))
+				GameTooltip:AddLine(realmName)
+				GameTooltip:AddLine(faction)
+				GameTooltip:AddLine(zoneName)
+			else
+				GameTooltip:AddLine(client)
+				GameTooltip:AddLine(toonName)
+				GameTooltip:AddLine(gameText)
+			end
 		end
 	end
 	
@@ -430,6 +370,8 @@ local function openArchive(self, target, chatType)
 	PM:SelectArchive(target, chatType)
 	PMArchiveFrame:Show()
 end
+
+local playerFactionGroup = UnitFactionGroup("player")
 
 local menuButton = CreateFrame("Button", nil, infoPanel)
 menuButton:SetNormalTexture([[Interface\ChatFrame\UI-ChatIcon-ScrollDown-Up]])
@@ -478,8 +420,9 @@ menuButton.menu.initialize = function(self, level)
 					info.disabled = true
 				end
 			else
-				local presenceID, presenceName, _, _, toonName, toonID = BNGetFriendInfo(index)
-				if toonID then
+				local _, _, _, _, _, toonID = BNGetFriendInfo(index)
+				local _, _, client, _, realmID, faction = BNGetToonInfo(thread.targetID)
+				if client == BNET_CLIENT_WOW and faction == playerFactionGroup and realmID ~= 0 then
 					info.func = inviteBNet
 					info.arg1 = toonID
 				else
@@ -524,6 +467,7 @@ menuButton.menu.initialize = function(self, level)
 		end
 	end
 end
+
 
 local editbox = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
 PM.editbox = editbox
@@ -579,12 +523,6 @@ editbox:SetScript("OnTabPressed", function(self)
 		end
 	end
 end)
-editbox:SetScript("OnUpdate", function(self)
-	if self.setText then
-		self:SetText("")
-		self.setText = nil
-	end
-end)
 editbox:SetScript("OnEditFocusGained", function(self)
 	ACTIVE_CHAT_EDIT_BOX = self
 	frame:Raise()
@@ -600,6 +538,13 @@ editbox:SetScript("OnTextChanged", function(self, isUserInput)
 		PM:GetSelectedChat().editboxText = self:GetText()
 	end
 end)
+editbox:SetScript("OnUpdate", function(self)
+	if self.setText then
+		self:SetText("")
+		self.setText = nil
+	end
+end)
+
 
 local chatLogInset = CreateFrame("Frame", nil, frame, "InsetFrameTemplate")
 chatLogInset:SetPoint("TOP", infoPanel, "BOTTOM", 0, 0)
@@ -612,7 +557,19 @@ chatLogInset:SetPoint("BOTTOM", editbox, "TOP", 0, 4)
 -- stripe:SetPoint("RIGHT", -2, 0)
 -- stripe:SetPoint("BOTTOM", editbox, "TOP")
 
+local linkTypes = {
+	achievement = true,
+	enchant = true,
+	glyph = true,
+	instancelock = true,
+	item = true,
+	quest = true,
+	spell = true,
+	talent = true,
+}
+
 local chatLog = CreateFrame("ScrollingMessageFrame", nil, chatLogInset)
+PM.chatLog = chatLog
 chatLog:SetPoint("TOPRIGHT", -6, -6)
 chatLog:SetPoint("BOTTOMLEFT", 6, 5)
 chatLog:SetMaxLines(256)
@@ -621,6 +578,15 @@ chatLog:SetFading(false)
 chatLog:SetIndentedWordWrap(true)
 -- chatLog:SetToplevel(true)
 chatLog:SetScript("OnHyperlinkClick", ChatFrame_OnHyperlinkShow)
+chatLog:SetScript("OnHyperlinkEnter", function(self, link, ...)
+	if linkTypes[link:match("^([^:]+)")] then
+		ShowUIPanel(GameTooltip)
+		GameTooltip:SetOwner(UIParent, "ANCHOR_CURSOR")
+		GameTooltip:SetHyperlink(link)
+		GameTooltip:Show()
+	end
+end)
+chatLog:SetScript("OnHyperlinkLeave", GameTooltip_Hide)
 chatLog:SetScript("OnMouseWheel", function(self, delta)
 	if delta > 0 then
 		if IsShiftKeyDown() then
@@ -640,29 +606,7 @@ chatLog:SetScript("OnMouseWheel", function(self, delta)
 		self.scrollToBottom.flash:Stop()
 	end
 end)
-PM.chatLog = chatLog
 
-local linkTypes = {
-	achievement = true,
-	enchant = true,
-	glyph = true,
-	instancelock = true,
-	item = true,
-	quest = true,
-	spell = true,
-	talent = true,
-}
-
-chatLog:SetScript("OnHyperlinkEnter", function(self, link, ...)
-	if linkTypes[link:match("^([^:]+)")] then
-		ShowUIPanel(GameTooltip)
-		GameTooltip:SetOwner(UIParent, "ANCHOR_CURSOR")
-		GameTooltip:SetHyperlink(link)
-		GameTooltip:Show()
-	end
-end)
-
-chatLog:SetScript("OnHyperlinkLeave", GameTooltip_Hide)
 
 local scrollToBottomButton = CreateFrame("Button", nil, frame)
 scrollToBottomButton:SetNormalTexture([[Interface\ChatFrame\UI-ChatIcon-ScrollEnd-Up]])
@@ -694,64 +638,6 @@ fade:SetDuration(0.8)
 fade:SetSmoothing("OUT")
 
 
-local function openChat(target, chatType)
-	-- ChatFrame_SendSmartTell does not come with a chat type; figures out from target string
-	if not chatType then
-		if BNet_GetPresenceID(target) then
-			chatType = "BN_WHISPER"
-		else
-			chatType = "WHISPER"
-		end
-	end
-	if chatType == "WHISPER" and not target:match("%-") then
-		target = gsub(strlower(target), ".", strupper, 1).."-"..gsub(GetRealmName(), " ", "")
-	end
-	if PM:IsThreadActive(target, chatType) then
-		-- PM:OpenChat(target, chatType)
-	else
-		PM:CreateThread(target, chatType)
-	end
-	PM:SelectChat(target, chatType)
-	PM:Show()
-	editbox:SetFocus()
-end
-
-local hooks = {
-	ChatFrame_ReplyTell = function(chatFrame)
-		local lastTell, lastTellType = ChatEdit_GetLastTellTarget()
-		if lastTell then
-			editbox.setText = true
-			openChat(lastTell, lastTellType)
-		end
-	end,
-	ChatFrame_ReplyTell2 = function(chatFrame)
-		local lastTold, lastToldType = ChatEdit_GetLastToldTarget()
-		if lastTold then
-			editbox.setText = true
-			openChat(lastTold, lastToldType)
-		end
-	end,
-	ChatFrame_SendTell = function(name)
-		openChat(name, "WHISPER")
-	end,
-	ChatFrame_SendSmartTell = function(name)
-		openChat(name)
-	end,
-}
-
-for functionName, hook in pairs(hooks) do
-	local originalFunction = _G[functionName]
-	_G[functionName] = function(...)
-		if PM:ShouldSuppress() then
-			originalFunction(...)
-			return
-		end
-		
-		hook(...)
-	end
-end
-
-
 -- WHISPER
 -- WHISPER_INFORM
 -- AFK
@@ -770,12 +656,97 @@ function PM:Show()
 end
 
 function PM:UpdateThreadList()
+	-- if not self.presencesReady then return end
 	scrollFrame:update()
 end
 
+function PM:CreateScrollButtons()
+	scrollFrame:CreateButtons()
+end
+
+local function addBNetFriend(index)
+	local presenceID, presenceName = BNGetFriendInfo(index)
+	if not PM:IsThreadActive(presenceName, "BN_WHISPER") then
+		tinsert(all, {
+			target = presenceName,
+			type = "BN_WHISPER",
+		})
+	end
+end
+
+local function addWoWFriend(index)
+	local name = GetFriendInfo(index)
+	if not name then return end
+	if not name:match("%-") then
+		name = name.."-"..gsub(GetRealmName(), " ", "")
+	end
+	if not PM:IsThreadActive(name, "WHISPER") then
+		tinsert(all, {
+			target = name,
+			type = "WHISPER",
+		})
+	end
+end
+
+function PM:UpdateThreads()
+	wipe(all)
+	
+	for i, thread in ipairs(self.db.activeThreads) do
+		tinsert(all, thread)
+	end
+	
+	local numBNetTotal, numBNetOnline = BNGetNumFriends()
+	local numWoWTotal, numWoWOnline = GetNumFriends()
+	
+	if self.db.threadListBNetFriends then
+		for i = 1, numBNetOnline do
+			addBNetFriend(i)
+		end
+	end
+	
+	if self.db.threadListWoWFriends then
+		for i = 1, numWoWOnline do
+			addWoWFriend(i)
+		end
+	end
+	
+	if self.db.threadListShowOffline then
+		if self.db.threadListBNetFriends then
+			for i = numBNetOnline + 1, numBNetTotal do
+				addBNetFriend(i)
+			end
+		end
+		
+		if self.db.threadListWoWFriends then
+			for i = numWoWOnline + 1, numWoWTotal do
+				addWoWFriend(i)
+			end
+		end
+	end
+	
+	local numActiveThreads = #PM.db.activeThreads
+	
+	if (numActiveThreads > 0) and (#all > numActiveThreads) then
+		tinsert(all, numActiveThreads + 1, {separator = true})
+		scrollFrame:ExpandButton(numActiveThreads)
+	else
+		scrollFrame:CollapseButton()
+	end
+	self:UpdateThreadList()
+end
+
+local function printMessage(thread, messageIndex, atTop)
+	local message = thread.messages[messageIndex]
+	PM:PrintMessage(thread, message.messageType, message.text, message.timestamp, message.active, atTop)
+	local nextMessage = thread.messages[messageIndex + 1]
+	if not message.active and (not nextMessage or nextMessage.active) then
+		chatLog:AddMessage(" "..date("%Y-%m-%d", message.timestamp), 0.8, 0.8, 0.8)
+		chatLog:AddMessage(" ")
+	end
+end
+
 local function printThrottler(self, elapsed)
-	local message = self.currentTab.messages[self.messageThrottleIndex]
-	self:PrintMessage(self.currentTab, message.messageType, message.text, message.timestamp, message.active, true)
+	printMessage(self.currentThread, self.messageThrottleIndex, true)
 	self.messageThrottleIndex = self.messageThrottleIndex - 1
 	if self.messageThrottleIndex == 0 then
 		self:RemoveOnUpdate()
@@ -794,20 +765,14 @@ function PM:SelectChat(target, chatType)
 	-- printing too many messages at once causes a noticable screen freeze, so we apply throttling at a certain amount of messages
 	if numMessages > MAX_INSTANT_MESSAGES then
 		for i = numMessages - MAX_INSTANT_MESSAGES + 1, numMessages do
-			local message = tab.messages[i]
-			self:PrintMessage(tab, message.messageType, message.text, message.timestamp, message.active)
+			printMessage(tab, i)
 		end
-		self.currentTab = tab
+		self.currentThread = tab
 		self.messageThrottleIndex = numMessages - MAX_INSTANT_MESSAGES
 		self:SetOnUpdate(printThrottler)
 	else
-		for i, message in ipairs(tab.messages) do
-			local previousMessage = tab.messages[i - 1]
-			if message.active and not (previousMessage and previousMessage.active) then
-				chatLog:AddMessage(" "..date("%Y-%m-%d", previousMessage.timestamp), 0.8, 0.8, 0.8)
-				chatLog:AddMessage(" ")
-			end
-			self:PrintMessage(tab, message.messageType, message.text, message.timestamp, message.active)
+		for i = 1, #tab.messages do
+			printMessage(tab, i)
 		end
 		self:RemoveOnUpdate()
 	end
@@ -819,6 +784,14 @@ function PM:SelectChat(target, chatType)
 	self:UpdateInfo()
 	self.db.selectedTarget = target
 	self.db.selectedType = chatType
+	if chatType == "BN_WHISPER" then
+		local presenceID = BNet_GetPresenceID(target)
+		local presenceID, presenceName, battleTag, isBattleTagPresence = BNGetFriendInfoByID(presenceID)
+		self.db.selectedBattleTag = battleTag
+	else
+		self.db.selectedBattleTag = nil
+	end
+	menuButton.menu:Close()
 	self:UpdateThreadList()
 	if frame:IsShown() then
 		tab.unread = nil
@@ -887,7 +860,7 @@ function PM:PrintMessage(thread, messageType, message, timestamp, isActive, addT
 	end
 	thread.lastTarget = messageType
 	local t = date("*t", timestamp)
-	chatLog:AddMessage(format("|cffd0d0d0%02d:%02d|r %s", t.hour, t.min, message), r, g, b, GetChatTypeIndex(thread.type), addToTop)
+	chatLog:AddMessage(format("|cffd0d0d0%02d:%02d|r %s", t.hour, t.min, message), r, g, b, isActive and GetChatTypeIndex(thread.type), addToTop)
 	if not addToTop and not chatLog:AtBottom() and not scrollToBottomButton.flash:IsPlaying() then
 		scrollToBottomButton.flash:Play()
 	end
@@ -895,15 +868,15 @@ end
 
 function PM:UpdateInfo()
 	local selectedTab = self:GetSelectedChat()
-	local presenceID = BNet_GetPresenceID(selectedTab.target)
 	local name, info, texture
 	infoPanel.icon:SetHeight(24)
-	if presenceID then
+	if selectedTab.type == "BN_WHISPER" then
+		local presenceID = BNet_GetPresenceID(selectedTab.target)
 		if not selectedTab.targetID then
 			selectedTab.targetID = presenceID
 		end
-		local _, presenceName, battleTag, isBattleTagPresence, toonName, _, client, isOnline, lastOnline, isAFK, isDND = BNGetFriendInfoByID(presenceID)
-		local _, toonName, client, realmName, _, faction, race, class, _, zoneName, level, gameText = BNGetToonInfo(presenceID)
+		local _, presenceName, battleTag, isBattleTagPresence, toonName, toonID, client, isOnline, lastOnline, isAFK, isDND = BNGetFriendInfoByID(presenceID)
+		local _, toonName, _, realmName, _, faction, race, class, _, zoneName, level, gameText = BNGetToonInfo(toonID or presenceID)
 		infoPanel.icon:SetTexCoord(0, 1, 0, 1)
 		name = presenceName or UNKNOWN
 		if isAFK then
@@ -917,10 +890,10 @@ function PM:UpdateInfo()
 			info = toonName or ""
 			if client == BNET_CLIENT_WOW then
 				if zoneName and zoneName ~= "" then
-					info = info.."\n "..zoneName
+					info = info.." - "..zoneName
 				end
 			else
-				info = info.."\n "..gameText
+				info = info.." - "..gameText
 			end
 		end
 		texture = BNet_GetClientTexture(client)

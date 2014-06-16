@@ -44,6 +44,9 @@ archiveLog:SetSize(archive:GetWidth(), archive:GetHeight())
 archiveLog:SetFontObject(ChatFontNormal)
 archiveLog:SetAutoFocus(false)
 archiveLog:SetMultiLine(true)
+-- archiveLog:SetIndentedWordWrap(true)
+archiveLog:SetHyperlinksEnabled(true)
+archiveLog:SetScript("OnHyperlinkClick", ChatFrame_OnHyperlinkShow)
 archiveLog:SetScript("OnEscapePressed", archiveLog.ClearFocus)
 
 archiveLog:SetScript("OnCursorChanged", function(self, x, y, width, height)
@@ -91,7 +94,7 @@ local function printLog()
 			else
 				-- sender = "|cffffffffYou|r"
 				sender = "You"
-				r, g, b = r - darken, g - darken, b - darken
+				r, g, b = max(0, r - darken), max(0, g - darken), max(0, b - darken)
 			end
 			
 			text = text..format("\n|cffd0d0d0%s|r |cff%.2x%.2x%.2x[%s|cff%.2x%.2x%.2x]: %s|r", date("%H:%M", message.timestamp), r * 255, g * 255, b * 255, sender, r * 255, g * 255, b * 255, message.text)
@@ -163,6 +166,7 @@ function PM:SelectArchive(target, chatType)
 	selectedLog = target
 	selectedLogType = chatType
 	printLog()
+	archive:SetVerticalScroll(archive:GetVerticalScrollRange())
 	-- archive:UpdateScrollChildRect()
 	menu:SetText(Ambiguate(target, "none"))
 end
