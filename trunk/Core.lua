@@ -1,7 +1,7 @@
 local Libra = LibStub("Libra")
 
 local PM = Libra:NewAddon(...)
--- _G.PM = PM
+_G.PM = PM
 Libra:EmbedWidgets(PM)
 
 local function getPresenceByTag(battleTagQuery)
@@ -26,6 +26,9 @@ local function copyDefaults(src, dst)
 	end
 	return dst
 end
+
+local whisperColor = ChatTypeInfo["WHISPER"]
+local bnetWhisperColor = ChatTypeInfo["BN_WHISPER"]
 
 local defaults = {
 	width = 512,
@@ -58,8 +61,8 @@ local defaults = {
 		BN_WHISPER = true,
 	},
 	color = {
-		WHISPER = {r = 1, g = 0.5, b = 1},
-		BN_WHISPER = {r = 1, g = 0.5, b = 1},
+		WHISPER = {r = whisperColor.r, g = whisperColor.g, b = whisperColor.b},
+		BN_WHISPER = {r = bnetWhisperColor.r, g = bnetWhisperColor.g, b = bnetWhisperColor.b},
 	},
 	
 	clearEditboxFocusOnSend = true,
@@ -80,23 +83,39 @@ function PM:OnInitialize()
 	
 	PMFrame:SetSize(self.db.width, self.db.height)
 	PMFrame:ClearAllPoints()
-	PMFrame:SetPoint(self.db.point or "RIGHT", self.db.x, self.db.y)
+	PMFrame:SetPoint(self.db.point, self.db.x, self.db.y)
+	PMFrame:SetShown(self.db.shown)
+	
 	PM.threadListInset:SetWidth(self.db.threadListWidth)
+	
+	local activeThreads = self.db.activeThreads
+	for i = #activeThreads, 1, -1 do
+		local thread = activeThreads[i]
+		if thread.type == "BN_WHISPER" and not thread.battleTag then
+			tremove(activeThreads, i)
+		end
+	end
+	
+	local threads = self.db.threads
+	for i = #threads, 1, -1 do
+		local thread = threads[i]
+		if thread.type == "BN_WHISPER" and not thread.battleTag then
+			tremove(threads, i)
+		end
+	end
+	
 	self:CreateScrollButtons()
 	self:UpdateThreads()
-	PMFrame:SetShown(self.db.shown)
 	
 	self:UpdatePresences()
 	self:LoadSettings()
 	
 	-- print("BNIsSelf:", BNIsSelf(BNGetInfo()))
 	
-	-- self:RegisterEvent("PLAYER_LOGIN")
 	self:RegisterEvent("PLAYER_ENTERING_WORLD")
-	-- self:RegisterEvent("PLAYER_LOGOUT")
+	self:RegisterEvent("PLAYER_LOGOUT")
 	self:RegisterEvent("UPDATE_CHAT_COLOR")
 	self:RegisterEvent("FRIENDLIST_UPDATE")
-	-- self:RegisterEvent("BN_INFO_CHANGED")
 	self:RegisterEvent("BN_FRIEND_INFO_CHANGED")
 	self:RegisterEvent("BN_FRIEND_LIST_SIZE_CHANGED")
 	self:RegisterEvent("BN_CONNECTED")
@@ -126,19 +145,22 @@ function PM:PLAYER_ENTERING_WORLD()
 end
 
 function PM:PLAYER_LOGOUT()
+	-- print("PLAYER_LOGOUT")
+	-- print("IsLoggingOut:", IsLoggingOut())
 	local now = time()
 	local threads = self.db.threads
 	for i = #threads, 1, -1 do
 		local thread = threads[i]
 		local messages = thread.messages
 		if self.db.autoCleanArchive[thread.type] then
+			local threshold = self.db.archiveKeep[thread.type]
 			for i = #messages, 1, -1 do
-				if not message.active and (now - messages.timestamp) > self.db.archiveKeep[thread.type] then
+				if not message.active and (now - messages.timestamp) > threshold then
 					tremove(messages, i)
 				end
 			end
 			if #messages == 0 and not self:IsThreadActive(thread.target, thread.type) then
-				self:CloseChat(thread.target, thread.type)
+				-- self:CloseChat(thread.target, thread.type)
 				self:DeleteThread(thread.target, thread.type)
 			end
 		end
@@ -165,14 +187,11 @@ function PM:BN_FRIEND_LIST_SIZE_CHANGED()
 	self:UpdatePresences()
 end
 
-function PM:BN_INFO_CHANGED(...)
-	-- print("BN_INFO_CHANGED", ...)
-end
-
 function PM:BN_FRIEND_INFO_CHANGED(index)
 	if index and self:GetSelectedChat() and (BNGetFriendInfo(index) == self:GetSelectedChat().targetID) then
 		self:UpdateInfo()
 	end
+	-- print("IsLoggingOut:", IsLoggingOut())
 	self:UpdateThreads()
 end
 
@@ -221,6 +240,8 @@ function PM:CHAT_MSG_BN_WHISPER_PLAYER_OFFLINE(message, sender, language, channe
 end
 
 function PM:UpdatePresences()
+	self.presencesReady = true
+	
 	for i, chat in ipairs(self.db.activeThreads) do
 		if chat.type == "BN_WHISPER" then
 			local target, targetID = getPresenceByTag(chat.battleTag)
@@ -231,6 +252,7 @@ function PM:UpdatePresences()
 			chat.targetID = targetID
 			if not target then
 				-- print("Unable to resolve BattleTag", chat.battleTag)
+				self.presencesReady = false
 			end
 		end
 	end
@@ -244,6 +266,7 @@ function PM:UpdatePresences()
 			chat.targetID = targetID
 			if not target then
 				-- print("Unable to resolve BattleTag", chat.battleTag)
+				self.presencesReady = false
 			end
 		end
 	end
@@ -257,6 +280,14 @@ function PM:UpdatePresences()
 	end
 	if lastTell then ChatEdit_SetLastTellTarget(lastTell, self.db.lastTellType) end
 	if lastTold then ChatEdit_SetLastToldTarget(lastTold, self.db.lastToldType) end
+	
+	if self.db.selectedType == "BN_WHISPER" then
+		local selectedTarget = getPresenceByTag(self.db.selectedBattleTag)
+		self.db.selectedTarget = selectedTarget
+		if selectedTarget and self.db.shown then
+			PM:SelectChat(selectedTarget, self.db.selectedType)
+		end
+	end
 end
 
 function PM:CreateThread(target, chatType, isGM)
