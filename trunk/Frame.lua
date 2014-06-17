@@ -453,9 +453,9 @@ menuButton.menu.initialize = function(self, level)
 	if level == 2 then
 		-- LE_PARTY_CATEGORY_HOME
 		-- list all invitable toons
-		local index = BNGetFriendIndex(UIDROPDOWNMENU_MENU_VALUE)
+		local index = BNGetFriendIndex(BNet_GetPresenceID(UIDROPDOWNMENU_MENU_VALUE))
 		for i = 1, BNGetNumFriendToons(index) do
-			local _, _, client, _, realmID, faction, _, _, _, _, _, _, _, _, _, toonID = BNGetFriendToonInfo(index, i)
+			local _, toonName, client, _, realmID, faction, _, _, _, _, _, _, _, _, _, toonID = BNGetFriendToonInfo(index, i)
 			if client == BNET_CLIENT_WOW and faction == playerFactionGroup and realmID ~= 0 then
 				local info = UIDropDownMenu_CreateInfo()
 				info.text = toonName
@@ -737,11 +737,19 @@ end
 
 local function printMessage(thread, messageIndex, atTop)
 	local message = thread.messages[messageIndex]
-	PM:PrintMessage(thread, message.messageType, message.text, message.timestamp, message.active, atTop)
 	local nextMessage = thread.messages[messageIndex + 1]
-	if not message.active and (not nextMessage or nextMessage.active) then
-		chatLog:AddMessage(" "..date("%Y-%m-%d", message.timestamp), 0.8, 0.8, 0.8)
-		chatLog:AddMessage(" ")
+	if atTop then
+		if not message.active and (not nextMessage or nextMessage.active) then
+			chatLog:AddMessage(" ", 1, 1, 1, nil, atTop)
+			chatLog:AddMessage(" "..date("%Y-%m-%d", message.timestamp), 0.8, 0.8, 0.8, nil, atTop)
+		end
+		PM:PrintMessage(thread, message.messageType, message.text, message.timestamp, message.active, atTop)
+	else
+		PM:PrintMessage(thread, message.messageType, message.text, message.timestamp, message.active, atTop)
+		if not message.active and (not nextMessage or nextMessage.active) then
+			chatLog:AddMessage(" "..date("%Y-%m-%d", message.timestamp), 0.8, 0.8, 0.8, nil, atTop)
+			chatLog:AddMessage(" ", nil, nil, nil, nil, atTop)
+		end
 	end
 end
 

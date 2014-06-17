@@ -1,6 +1,7 @@
 local _, PM = ...
 local LSM = LibStub("LibSharedMedia-3.0")
 
+
 local frame = PM:CreateOptionsFrame("PM")
 
 SlashCmdList["PM"] = function(msg)
@@ -210,7 +211,7 @@ optionsBehaviour:CreateOptions({
 			for i, v in ipairs(suppressOptions) do
 				local info = UIDropDownMenu_CreateInfo()
 				info.text = v
-				info.func = onClick
+				info.func = self.set
 				info.arg1 = v
 				info.checked = PM.db.suppress[v]
 				info.isNotRadio = true
@@ -219,7 +220,7 @@ optionsBehaviour:CreateOptions({
 			end
 		end,
 		set = function(self, arg, arg2, checked)
-			PM.db.suppress[arg] = not checked
+			PM.db.suppress[arg] = checked
 		end,
 	},
 	{
