@@ -1,15 +1,17 @@
-local addonName, PM = ...
+local _, PM = ...
 
 local selectedLog
 local selectedLogType
 
-local f = CreateFrame("Frame", "PMArchiveFrame", UIParent, "BasicFrameTemplate")
-f.TitleText:SetText("Archive")
-f:SetPoint("CENTER")
-f:SetSize(440, 424)
-f:Hide()
+local frame = CreateFrame("Frame", "PMArchiveFrame", UIParent, "BasicFrameTemplate")
+frame.TitleText:SetText("Archive")
+frame:SetPoint("CENTER")
+frame:SetSize(440, 424)
+frame:EnableMouse(true)
+frame:SetToplevel(true)
+frame:Hide()
 
-local inset = CreateFrame("Frame", nil, f, "InsetFrameTemplate")
+local inset = CreateFrame("Frame", nil, frame, "InsetFrameTemplate")
 inset:SetPoint("TOPLEFT", PANEL_INSET_LEFT_OFFSET, -80)
 inset:SetPoint("BOTTOMRIGHT", PANEL_INSET_RIGHT_OFFSET, PANEL_INSET_BOTTOM_OFFSET + 2)
 
@@ -17,7 +19,7 @@ local function onClick(self, target, chatType)
 	PM:SelectArchive(target, chatType)
 end
 
-local menu = PM:CreateDropdown("Frame", f)
+local menu = PM:CreateDropdown("Frame", frame)
 menu:SetWidth(128)
 menu:SetPoint("TOPLEFT", 0, -29)
 menu:JustifyText("LEFT")
@@ -29,7 +31,7 @@ menu.initialize = function(self)
 			info.func = onClick
 			info.arg1 = thread.target
 			info.arg2 = thread.type
-			info.checked = selectedLog == thread.target
+			info.checked = (selectedLog == thread.target)
 			self:AddButton(info)
 		end
 	end
@@ -48,7 +50,6 @@ archiveLog:SetMultiLine(true)
 archiveLog:SetHyperlinksEnabled(true)
 archiveLog:SetScript("OnHyperlinkClick", ChatFrame_OnHyperlinkShow)
 archiveLog:SetScript("OnEscapePressed", archiveLog.ClearFocus)
-
 archiveLog:SetScript("OnCursorChanged", function(self, x, y, width, height)
 	if x == self.cursorX and y == self.cursorY then
 		return
@@ -67,20 +68,16 @@ end)
 local function printLog()
 	local darken = 0.2
 	local color = ChatTypeInfo[selectedLogType]
-	-- local color = HIGHLIGHT_FONT_COLOR
-	-- local r, g, b = color.r, color.g, color.b
-	local thread = PM:GetChat(selectedLog, selectedLogType)
+	local thread = PM:GetThread(selectedLog, selectedLogType)
 	
 	local target = selectedLog
 	if selectedLogType == "WHISPER" then
 		target = Ambiguate(target, "none")
 		if thread.targetID then
 			local localizedClass, englishClass, localizedRace, englishRace = GetPlayerInfoByGUID(thread.targetID)
-			if englishClass then
-				local color = RAID_CLASS_COLORS[englishClass]
-				if color then
-					target = format("|c%s%s|r", color.colorStr, target)
-				end
+			local color = englishClass and (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[englishClass]
+			if color then
+				target = format("|c%s%s|r", color.colorStr, target)
 			end
 		end
 	end
@@ -92,14 +89,23 @@ local function printLog()
 			if message.messageType == "in" then
 				sender = target
 			else
-				-- sender = "|cffffffffYou|r"
 				sender = "You"
 				r, g, b = max(0, r - darken), max(0, g - darken), max(0, b - darken)
 			end
 			
-			text = text..format("\n|cffd0d0d0%s|r |cff%.2x%.2x%.2x[%s|cff%.2x%.2x%.2x]: %s|r", date("%H:%M", message.timestamp), r * 255, g * 255, b * 255, sender, r * 255, g * 255, b * 255, message.text)
+			local time = date("*t", message.timestamp)
+			local colorString = format("|cff%.2x%.2x%.2x", r * 255, g * 255, b * 255)
+			
+			text = text..format("\n|cffd0d0d0%s|r %s[%s%s]: %s|r", date("%H:%M", message.timestamp), colorString, sender, colorString, message.text)
+			
+			local nextMessage = thread.messages[i + 1]
+			local nextTime = nextMessage and date("*t", nextMessage.timestamp)
+			if nextMessage and (nextTime.yday ~= time.yday or nextTime.year ~= time.year) then
+				text = text..format("\n  %s\n\n  %s", date("%Y-%m-%d", message.timestamp), date("%Y-%m-%d", nextMessage.timestamp))
+			end
 		end
 	end
+	text = text..format("\n  %s", date("%Y-%m-%d", thread.messages[#thread.messages].timestamp))
 	archiveLog:SetText(strsub(text, 2))
 end
 
@@ -111,16 +117,18 @@ end)
 
 archive:SetScrollChild(archiveLog)
 
+
+
 local searchPosition
 
-local function pipe(text)
+local function tab(text)
 	return gsub(text, ".", "\t")
 end
 
 local function search(text)
 	local log = archiveLog:GetText()
 	-- replace timestamp and sender names, leaving only the actual messages searchable
-	log = gsub(log, "\n.-: ", pipe)
+	log = gsub(log, "\n.-: ", tab)
 	local start, stop = strfind(strlower(log), strlower(text), searchPosition, true)
 	-- if match, start searching from this position next time
 	if start then
@@ -131,7 +139,7 @@ local function search(text)
 	end
 end
 
-local searchBox = PM:CreateEditbox(f, true)
+local searchBox = PM:CreateEditbox(frame, true)
 searchBox:SetWidth(128)
 searchBox:SetPoint("TOPRIGHT", -16, -33)
 searchBox:SetScript("OnTextChanged", function(self, isUserInput)
@@ -146,12 +154,13 @@ searchBox:SetScript("OnTextChanged", function(self, isUserInput)
 end)
 searchBox:SetScript("OnEnterPressed", function(self)
 	if not search(self:GetText()) then
+		-- wrap around
 		searchPosition = 1
 		search(self:GetText())
 	end
 end)
 
-local purgeButton = CreateFrame("Button", "PMArchivePurgeButton", f, "UIMenuButtonStretchTemplate")
+local purgeButton = CreateFrame("Button", "PMArchivePurgeButton", frame, "UIMenuButtonStretchTemplate")
 purgeButton:SetWidth(64)
 purgeButton:SetPoint("LEFT", menu, "RIGHT", -4, 2)
 purgeButton:SetText("Purge")
@@ -166,7 +175,6 @@ function PM:SelectArchive(target, chatType)
 	selectedLog = target
 	selectedLogType = chatType
 	printLog()
-	archive:SetVerticalScroll(archive:GetVerticalScrollRange())
-	-- archive:UpdateScrollChildRect()
 	menu:SetText(Ambiguate(target, "none"))
+	frame:Show()
 end

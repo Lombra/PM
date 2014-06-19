@@ -12,6 +12,7 @@ local function getPresenceByTag(battleTagQuery)
 			return presenceName, presenceID
 		end
 	end
+	-- print("Unable to resolve BattleTag", battleTagQuery)
 end
 
 local function copyDefaults(src, dst)
@@ -31,6 +32,9 @@ local whisperColor = ChatTypeInfo["WHISPER"]
 local bnetWhisperColor = ChatTypeInfo["BN_WHISPER"]
 
 local defaults = {
+	activeThreads = {},
+	threads = {},
+	
 	width = 512,
 	height = 256,
 	point = "RIGHT",
@@ -38,20 +42,8 @@ local defaults = {
 	y = 0,
 	threadListWidth = 128,
 	
-	activeThreads = {},
-	threads = {},
-	
 	font = "Arial Narrow",
 	fontSize = 12,
-	
-	autoCleanArchive = {
-		WHISPER = true,
-		BN_WHISPER = true,
-	},
-	archiveKeep = {
-		WHISPER = 0,
-		BN_WHISPER = 7 * 24 * 3600,
-	},
 	
 	threadListWoWFriends = true,
 	threadListBNetFriends = true,
@@ -74,6 +66,15 @@ local defaults = {
 		combat = false,
 		dnd = false,
 		encounter = false,
+	},
+	
+	autoCleanArchive = {
+		WHISPER = true,
+		BN_WHISPER = true,
+	},
+	archiveKeep = {
+		WHISPER = 0,
+		BN_WHISPER = 7 * 24 * 3600,
 	},
 }
 
@@ -113,7 +114,7 @@ function PM:OnInitialize()
 	-- print("BNIsSelf:", BNIsSelf(BNGetInfo()))
 	
 	self:RegisterEvent("PLAYER_ENTERING_WORLD")
-	self:RegisterEvent("PLAYER_LOGOUT")
+	self:RegisterEvent("PLAYER_LOGOUT", "CleanArchive")
 	self:RegisterEvent("UPDATE_CHAT_COLOR")
 	self:RegisterEvent("FRIENDLIST_UPDATE")
 	self:RegisterEvent("BN_FRIEND_INFO_CHANGED")
@@ -131,40 +132,14 @@ function PM:OnInitialize()
 end
 
 function PM:PLAYER_ENTERING_WORLD()
-	-- print("BNConnected:", BNConnected())
-	-- print("BNFeaturesEnabled:", BNFeaturesEnabled())
-	-- print("BNFeaturesEnabledAndConnected:", BNFeaturesEnabledAndConnected())
-	-- print("BNIsSelf:", BNIsSelf(BNGetInfo()))
+	self:CleanArchive()
 	
-	-- do this here so it won't get hidden every time
+	-- need to insert into UISpecialFrames after PLAYER_LOGIN as all special frames gets hidden at that point
 	tinsert(UISpecialFrames, "PMFrame")
 	if self.db.shown then
-		PM:SelectChat(self.db.selectedTarget, self.db.selectedType)
+		PM:SelectThread(self.db.selectedTarget, self.db.selectedType)
 	end
 	self:UnregisterEvent("PLAYER_ENTERING_WORLD")
-end
-
-function PM:PLAYER_LOGOUT()
-	-- print("PLAYER_LOGOUT")
-	-- print("IsLoggingOut:", IsLoggingOut())
-	local now = time()
-	local threads = self.db.threads
-	for i = #threads, 1, -1 do
-		local thread = threads[i]
-		local messages = thread.messages
-		if self.db.autoCleanArchive[thread.type] then
-			local threshold = self.db.archiveKeep[thread.type]
-			for i = #messages, 1, -1 do
-				if not message.active and (now - messages.timestamp) > threshold then
-					tremove(messages, i)
-				end
-			end
-			if #messages == 0 and not self:IsThreadActive(thread.target, thread.type) then
-				-- self:CloseChat(thread.target, thread.type)
-				self:DeleteThread(thread.target, thread.type)
-			end
-		end
-	end
 end
 
 function PM:GetFriendInfo(name)
@@ -177,7 +152,7 @@ function PM:GetFriendInfo(name)
 end
 
 function PM:FRIENDLIST_UPDATE()
-	if self:GetSelectedChat() then
+	if self:GetSelectedThread() then
 		self:UpdateInfo()
 	end
 	self:UpdateThreads()
@@ -188,7 +163,7 @@ function PM:BN_FRIEND_LIST_SIZE_CHANGED()
 end
 
 function PM:BN_FRIEND_INFO_CHANGED(index)
-	if index and self:GetSelectedChat() and (BNGetFriendInfo(index) == self:GetSelectedChat().targetID) then
+	if index and self:GetSelectedThread() and (BNGetFriendInfo(index) == self:GetSelectedThread().targetID) then
 		self:UpdateInfo()
 	end
 	-- print("IsLoggingOut:", IsLoggingOut())
@@ -196,7 +171,6 @@ function PM:BN_FRIEND_INFO_CHANGED(index)
 end
 
 function PM:BN_CONNECTED(...)
-	-- print("BN_CONNECTED", ...)
 	-- presence IDs will have changed once Battle.net connection is reestablished
 	self:UpdatePresences()
 end
@@ -215,17 +189,17 @@ function PM:BN_SELF_OFFLINE(...)
 end
 
 function PM:BN_FRIEND_ACCOUNT_ONLINE(presenceID)
-	local chat = self:GetChat(select(2, BNGetFriendInfoByID(presenceID)), "BN_WHISPER", true)
-	if chat then
-		self:SaveMessage(chat, nil, "%s has come online.")
+	local thread = self:GetThread(select(2, BNGetFriendInfoByID(presenceID)), "BN_WHISPER", true)
+	if thread then
+		self:SaveMessage(thread, nil, "%s has come online.")
 	end
 end
 
 function PM:BN_FRIEND_ACCOUNT_OFFLINE(presenceID)
 	if not BNConnected() then return end
-	local chat = self:GetChat(select(2, BNGetFriendInfoByID(presenceID)), "BN_WHISPER", true)
-	if chat then
-		self:SaveMessage(chat, nil, "%s has gone offline.")
+	local thread = self:GetThread(select(2, BNGetFriendInfoByID(presenceID)), "BN_WHISPER", true)
+	if thread then
+		self:SaveMessage(thread, nil, "%s has gone offline.")
 	end
 end
 
@@ -233,41 +207,21 @@ function PM:BN_TOON_NAME_UPDATED(id, toonName, dunno)
 end
 
 function PM:CHAT_MSG_BN_WHISPER_PLAYER_OFFLINE(message, sender, language, channelString, target, flags, _, _, channelName, _, _, guid, presenceID)
-	local chat = self:GetChat(sender, "BN_WHISPER", true)
-	if chat then
+	local thread = self:GetThread(sender, "BN_WHISPER", true)
+	if thread then
 		self:SaveMessage(sender, "BN_WHISPER", nil, message)
 	end
 end
 
 function PM:UpdatePresences()
-	self.presencesReady = true
-	
-	for i, chat in ipairs(self.db.activeThreads) do
-		if chat.type == "BN_WHISPER" then
-			local target, targetID = getPresenceByTag(chat.battleTag)
-			if selectedTarget == chat.target then
-				selectedTarget = target
-			end
-			chat.target = target
-			chat.targetID = targetID
-			if not target then
-				-- print("Unable to resolve BattleTag", chat.battleTag)
-				self.presencesReady = false
-			end
+	for i, thread in ipairs(self.db.activeThreads) do
+		if thread.type == "BN_WHISPER" then
+			thread.target, thread.targetID = getPresenceByTag(thread.battleTag)
 		end
 	end
-	for i, chat in ipairs(self.db.threads) do
-		if chat.type == "BN_WHISPER" then
-			local target, targetID = getPresenceByTag(chat.battleTag)
-			if selectedTarget == chat.target then
-				selectedTarget = target
-			end
-			chat.target = target
-			chat.targetID = targetID
-			if not target then
-				-- print("Unable to resolve BattleTag", chat.battleTag)
-				self.presencesReady = false
-			end
+	for i, thread in ipairs(self.db.threads) do
+		if thread.type == "BN_WHISPER" then
+			thread.target, thread.targetID = getPresenceByTag(thread.battleTag)
 		end
 	end
 	local lastTell = self.db.lastTell
@@ -285,28 +239,56 @@ function PM:UpdatePresences()
 		local selectedTarget = getPresenceByTag(self.db.selectedBattleTag)
 		self.db.selectedTarget = selectedTarget
 		if selectedTarget and self.db.shown then
-			PM:SelectChat(selectedTarget, self.db.selectedType)
+			PM:SelectThread(selectedTarget, self.db.selectedType)
+		end
+	end
+end
+
+function PM:CleanArchive()
+	local now = time()
+	local threads = self.db.threads
+	for i = #threads, 1, -1 do
+		local thread = threads[i]
+		local messages = thread.messages
+		if self.db.autoCleanArchive[thread.type] then
+			local threshold = self.db.archiveKeep[thread.type]
+			for i = #messages, 1, -1 do
+				local message = messages[i]
+				if not message.active and (now - message.timestamp) > threshold then
+					tremove(messages, i)
+				end
+			end
+			if #messages == 0 and not self:IsThreadActive(thread.target, thread.type) then
+				-- self:CloseChat(thread.target, thread.type)
+				self:DeleteThread(thread.target, thread.type)
+			end
+		end
+	end
+end
+
+function PM:GetThread(target, chatType)
+	for i, thread in ipairs(self.db.threads) do
+		if thread.target == target and thread.type == chatType then
+			return thread
 		end
 	end
 end
 
 function PM:CreateThread(target, chatType, isGM)
-	local chat = {
+	local thread = {
 		target = target,
 		type = chatType,
 		isGM = isGM,
 		messages = {},
 	}
 	if chatType == "BN_WHISPER" then
-		local presenceID = BNet_GetPresenceID(target)
-		local presenceID, presenceName, battleTag, isBattleTagPresence = BNGetFriendInfoByID(presenceID)
-		chat.battleTag = battleTag
+		thread.battleTag = self:GetBattleTag(target)
 	end
-	if not self:GetChat(target, chatType) then
-		tinsert(self.db.threads, chat)
+	if not self:GetThread(target, chatType) then
+		tinsert(self.db.threads, thread)
 	end
 	self:ActivateThread(target, chatType)
-	return chat
+	return thread
 end
 
 function PM:DeleteThread(target, chatType)
@@ -314,14 +296,6 @@ function PM:DeleteThread(target, chatType)
 		if thread.target == target and thread.type == chatType then
 			tremove(self.db.threads, i)
 			break
-		end
-	end
-end
-
-function PM:GetChat(target, chatType)
-	for i, tab in ipairs(self.db.threads) do
-		if tab.target == target and tab.type == chatType then
-			return tab
 		end
 	end
 end
@@ -338,19 +312,17 @@ function PM:ActivateThread(target, chatType)
 	if chatType == "WHISPER" and not target:match("%-") then
 		target = gsub(strlower(target), ".", strupper, 1).."-"..gsub(GetRealmName(), " ", "")
 	end
-	if not self:GetChat(target, chatType) then return end
-	local chat = {
+	if not self:GetThread(target, chatType) then return end
+	local thread = {
 		target = target,
 		type = chatType,
 	}
 	if chatType == "BN_WHISPER" then
-		local presenceID = BNet_GetPresenceID(target)
-		local presenceID, presenceName, battleTag, isBattleTagPresence = BNGetFriendInfoByID(presenceID)
-		chat.battleTag = battleTag
+		thread.battleTag = self:GetBattleTag(target)
 	end
-	tinsert(self.db.activeThreads, chat)
+	tinsert(self.db.activeThreads, thread)
 	self:UpdateThreads()
-	return chat
+	return thread
 end
 
 function PM:CloseChat(target, chatType)
@@ -362,26 +334,27 @@ function PM:CloseChat(target, chatType)
 				ChatEdit_SetLastToldTarget(nil, nil)
 			end
 			tremove(activeThreads, i)
-			local chat = self:GetChat(target, chatType)
+			thread = self:GetThread(target, chatType)
 			if #activeThreads == 0 then
 				PMFrame:Hide()
-			elseif chat == self:GetSelectedChat() then
-				local tab = activeThreads[i] or activeThreads[i - 1]
-				self:SelectChat(tab.target, tab.type)
+				self.selectedChat = nil
+			elseif thread == self:GetSelectedThread() then
+				local thread = activeThreads[i] or activeThreads[i - 1]
+				self:SelectThread(thread.target, thread.type)
 			end
-			for i = #chat.messages, 1, -1 do
-				local message = chat.messages[i]
+			for i = #thread.messages, 1, -1 do
+				local message = thread.messages[i]
 				if not message.messageType then
-					tremove(chat.messages, i)
+					tremove(thread.messages, i)
 				end
 			end
 			-- if this thread type is set to instantly delete, then do that here, or if no messages were sent
-			if #chat.messages == 0 or (self.db.autoCleanArchive[thread.type] and self.db.archiveKeep[thread.type] == 0) then
+			if #thread.messages == 0 or (self.db.autoCleanArchive[chatType] and self.db.archiveKeep[chatType] == 0) then
 				self:DeleteThread(target, chatType)
 			else
 				-- these messages are no longer part of the active thread session
-				for i = #chat.messages, 1, -1 do
-					local message = chat.messages[i]
+				for i = #thread.messages, 1, -1 do
+					local message = thread.messages[i]
 					if not message.active then break end
 					message.active = nil
 				end
@@ -392,6 +365,18 @@ function PM:CloseChat(target, chatType)
 	end
 end
 
-function PM:GetSelectedChat()
+function PM:GetSelectedThread()
 	return self.selectedChat
+end
+
+function PM:GetBattleTag(presenceName)
+	local presenceID, presenceName, battleTag = BNGetFriendInfoByID(BNet_GetPresenceID(presenceName))
+	return battleTag
+end
+
+function PM:GetFullCharacterName(name)
+	if not name:match("%-") then
+		name = name.."-"..gsub(GetRealmName(), " ", "")
+	end
+	return name
 end
