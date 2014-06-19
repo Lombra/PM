@@ -3,18 +3,14 @@ local addonName, PM = ...
 
 hooksecurefunc("ChatEdit_SetLastTellTarget", function(target, chatType)
 	if chatType == "BN_WHISPER" then
-		local presenceID = BNet_GetPresenceID(target)
-		local presenceID, presenceName, battleTag, isBattleTagPresence = BNGetFriendInfoByID(presenceID)
-		target = battleTag
+		target = PM:GetBattleTag(target)
 	end
 	PM.db.lastTell, PM.db.lastTellType = target, chatType
 end)
 
 hooksecurefunc("ChatEdit_SetLastToldTarget", function(target, chatType)
 	if chatType == "BN_WHISPER" then
-		local presenceID = BNet_GetPresenceID(target)
-		local presenceID, presenceName, battleTag, isBattleTagPresence = BNGetFriendInfoByID(presenceID)
-		target = battleTag
+		target = PM:GetBattleTag(target)
 	end
 	PM.db.lastTold, PM.db.lastToldType = target, chatType
 end)
@@ -29,13 +25,13 @@ local function openChat(target, chatType)
 			chatType = "WHISPER"
 		end
 	end
-	if chatType == "WHISPER" and not target:match("%-") then
-		target = gsub(strlower(target), ".", strupper, 1).."-"..gsub(GetRealmName(), " ", "")
+	if chatType == "WHISPER" then
+		target = PM:GetFullCharacterName(target)
 	end
 	if not PM:IsThreadActive(target, chatType) then
 		PM:CreateThread(target, chatType)
 	end
-	PM:SelectChat(target, chatType)
+	PM:SelectThread(target, chatType)
 	PM:Show()
 	PM.editbox:SetFocus()
 end
@@ -94,21 +90,6 @@ local function messageEventFilter(event, arg1, arg2, arg3, arg4, arg5, arg6, arg
 end
 
 
--- local orig_ChatEdit_InsertLink = ChatEdit_InsertLink
-
--- function ChatEdit_InsertLink(text)
-	-- if not text then
-		-- return false;
-	-- end
-	
-	-- if editbox:HasFocus() then
-		-- editbox:Insert(text)
-		-- return true
-	-- end
-	
-	-- return orig_ChatEdit_InsertLink(text)
--- end
-
 local chatEvents = {
 	CHAT_MSG_WHISPER = "in",
 	CHAT_MSG_WHISPER_INFORM = "out",
@@ -139,13 +120,13 @@ function PM:HandleChatEvent(event, ...)
 		return
 	end
 	local chatType = Chat_GetChatCategory(event:sub(10))
-	if chatType == "WHISPER" and not sender:match("%-") then
-		sender = sender.."-"..gsub(GetRealmName(), " ", "")
+	if chatType == "WHISPER" then
+		sender = self:GetFullCharacterName(sender)
 	end
-	if not PM:IsThreadActive(sender, chatType) then
-		PM:CreateThread(sender, chatType, flags == "GM" or nil)
+	if not self:IsThreadActive(sender, chatType) then
+		self:CreateThread(sender, chatType, flags == "GM" or nil)
 	end
-	local thread = self:GetChat(sender, chatType) or self:CreateThread(sender, chatType, flags == "GM" or nil)
+	local thread = self:GetThread(sender, chatType)
 	if chatType == "WHISPER" then
 		thread.targetID = guid
 	end
@@ -153,17 +134,17 @@ function PM:HandleChatEvent(event, ...)
 		thread.targetID = presenceID
 	end
 	local messageType = chatEvents[event]
-	if messageType == "in" and not (PMFrame:IsShown() and thread == self:GetSelectedChat()) then
+	if messageType == "in" and not (PMFrame:IsShown() and thread == self:GetSelectedThread()) then
 		thread.unread = true
 		self:UpdateThreadList()
 	end
 	self:SaveMessage(sender, chatType, messageType, message)
-	if PM:ShouldSuppress() then
+	if self:ShouldSuppress() then
 		return
 	end
 	-- if the target of the currently selected thread is not the sender of this PM, then select their thread
-	if self:GetSelectedChat() ~= thread and not self.editbox:HasFocus() then
-		self:SelectChat(sender, chatType)
+	if self:GetSelectedThread() ~= thread and not self.editbox:HasFocus() then
+		self:SelectThread(sender, chatType)
 	end
 	self:Show()
 	if messageType == "in" then
@@ -178,9 +159,7 @@ function PM:CHAT_MSG_AFK(...)
 	if filter then
 		return
 	end
-	if not sender:match("%-") then
-		sender = sender.."-"..gsub(GetRealmName(), " ", "")
-	end
+	sender = self:GetFullCharacterName(sender)
 	-- if thread then
 		self:SaveMessage(sender, "WHISPER", nil, CHAT_AFK_GET..message)
 	-- end
@@ -191,12 +170,10 @@ function PM:CHAT_MSG_DND(...)
 	if filter then
 		return
 	end
-	if sender:match("%-") then
-		sender = sender.."-"..gsub(GetRealmName(), " ", "")
-	end
-	-- if thread then
+	sender = self:GetFullCharacterName(sender)
+	if self:IsThreadActive(sender, "WHISPER") then
 		self:SaveMessage(sender, "WHISPER", nil, CHAT_DND_GET..message)
-	-- end
+	end
 end
 
 -- local ERR_CHAT_PLAYER_NOT_FOUND_S = "No player named '%s' is currently playing."
@@ -210,11 +187,11 @@ function PM:CHAT_MSG_SYSTEM(...)
 	local sender = strmatch(message, ERR_CHAT_PLAYER_NOT_FOUND_S)
 	if not sender then return end
 	if not sender:match("%-") then
-		sender = sender.."-"..gsub(GetRealmName(), " ", "")
+		sender = gsub(strlower(sender), ".", strupper, 1).."-"..gsub(GetRealmName(), " ", "")
 	end
-	-- if thread then
+	if self:IsThreadActive(sender, "WHISPER") then
 		self:SaveMessage(sender, "WHISPER", nil, _G.ERR_CHAT_PLAYER_NOT_FOUND_S)
-	-- end
+	end
 end
 
 -- this function deterrmines whether chat messages should be sent to the addon or the default chat frame (true for send to chat frame)
@@ -230,7 +207,7 @@ function PM:ShouldSuppress()
 end
 
 function PM:SaveMessage(target, chatType, messageType, message)
-	local thread = self:GetChat(target, chatType)
+	local thread = self:GetThread(target, chatType)
 	tinsert(thread.messages, {
 		messageType = messageType,
 		text = message,
@@ -239,7 +216,7 @@ function PM:SaveMessage(target, chatType, messageType, message)
 		active = true,
 		unread = true,
 	})
-	if thread == self:GetSelectedChat() then
+	if thread == self:GetSelectedThread() then
 		self:PrintMessage(thread, messageType, message, time(), true)
 	end
 end

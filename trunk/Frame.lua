@@ -1,20 +1,28 @@
 local addonName, PM = ...
 
 
+local playerFactionGroup = UnitFactionGroup("player")
+
+local reverseclassnames = {}
+for k,v in pairs(LOCALIZED_CLASS_NAMES_MALE) do reverseclassnames[v] = k end
+for k,v in pairs(LOCALIZED_CLASS_NAMES_FEMALE) do reverseclassnames[v] = k end
+
+local threadListItems = {}
+
 local frame = CreateFrame("Frame", "PMFrame", UIParent, "BasicFrameTemplate")
 frame.TitleText:SetText("PM")
 frame:SetToplevel(true)
 frame:EnableMouse(true)
 frame:SetMovable(true)
-frame:RegisterForDrag("LeftButton")
 frame:SetDontSavePosition(true)
+frame:RegisterForDrag("LeftButton")
 frame:SetScript("OnDragStart", frame.StartMoving)
 frame:SetScript("OnDragStop", function(self)
 	self:StopMovingOrSizing()
 	PM.db.point, PM.db.x, PM.db.y = select(3, self:GetPoint())
 end)
 frame:SetScript("OnShow", function(self)
-	PM:GetSelectedChat().unread = nil
+	PM:GetSelectedThread().unread = nil
 	PM:UpdateThreadList()
 	PM.db.shown = true
 end)
@@ -31,14 +39,12 @@ insetLeft:SetPoint("BOTTOM", 0, PANEL_INSET_BOTTOM_OFFSET + 2)
 PM.threadListInset = insetLeft
 
 
-local all = {}
-
 local function onClick(self)
 	local target, type = self.target, self.type
 	if not PM:IsThreadActive(target, type) then
 		PM:CreateThread(target, type)
 	end
-	PM:SelectChat(target, type)
+	PM:SelectThread(target, type)
 end
 
 local function onEnter(self)
@@ -53,17 +59,17 @@ end
 local function onLeave(self)
 	if PM:IsThreadActive(self.target, self.type) and not self.close:IsMouseOver() then
 		self.close:Hide()
-		local thread = PM:GetChat(self.target, self.type)
-		if not self.selected and thread.unread then
-			self.flash:Play()
+		local thread = PM:GetThread(self.target, self.type)
+		if not self.selected then
+			self:UnlockHighlight()
+			if thread.unread then
+				self.flash:Play()
+			end
 		end
 		if self.type == "BN_WHISPER" then
 			self.icon:Show()
 		else
 			self.text:SetPoint("RIGHT", -2, 0)
-		end
-		if not self.selected then
-			self:UnlockHighlight()
 		end
 	end
 end
@@ -90,6 +96,22 @@ local closeScripts = {
 	end,
 }
 
+local function setButtonStatus(button, showStatus, isOnline, isAFK, isDND)
+	button.status:SetShown(showStatus)
+	button.shadow:SetShown(showStatus)
+	if showStatus then
+		if isAFK then
+			button.status:SetVertexColor(1, 0.5, 0)
+		elseif isDND then
+			button.status:SetVertexColor(1, 0, 0)
+		elseif isOnline then
+			button.status:SetVertexColor(0, 1, 0)
+		else
+			button.status:SetVertexColor(0.2, 0.2, 0.2)
+		end
+	end
+end
+
 local scrollFrame = PM:CreateScrollFrame("Hybrid", insetLeft)
 PM.scroll = scrollFrame
 local separator = scrollFrame:CreateTexture()
@@ -108,7 +130,7 @@ scrollFrame.update = function(self)
 	for line = 1, #self.buttons do
 		local button = self.buttons[line]
 		local lineplusoffset = line + offset
-		local object = all[lineplusoffset]
+		local object = threadListItems[lineplusoffset]
 		if object then
 			if object.separator then
 				button:SetHeader()
@@ -127,9 +149,9 @@ scrollFrame.update = function(self)
 			button.text:SetPoint("RIGHT", -2, 0)
 			
 			if not object.separator then
-				local thread = PM:GetChat(object.target, object.type)
+				local thread = PM:GetThread(object.target, object.type)
 				
-				local selectedThread = PM:GetSelectedChat()
+				local selectedThread = PM:GetSelectedThread()
 				if selectedThread and thread == selectedThread then
 					button:LockHighlight()
 					button.selected = true
@@ -154,45 +176,19 @@ scrollFrame.update = function(self)
 					local name = Ambiguate(object.target, "none")
 					local isFriend, connected, status = PM:GetFriendInfo(name)
 					button.text:SetText(name)
-					button.status:SetShown(isFriend)
-					button.shadow:SetShown(isFriend)
 					button.icon:Hide()
-					if isFriend then
-						if status == CHAT_FLAG_AFK then
-							button.status:SetVertexColor(1, 0.5, 0)
-						elseif status == CHAT_FLAG_DND then
-							button.status:SetVertexColor(1, 0, 0)
-						elseif connected then
-							button.status:SetVertexColor(0, 1, 0)
-						else
-							button.status:SetVertexColor(0.2, 0.2, 0.2)
-						end
-					end
+					setButtonStatus(button, isFriend, connected, status == CHAT_FLAG_AFK, status == CHAT_FLAG_DND)
 				end
 				
 				if object.type == "BN_WHISPER" then
 					local presenceID = object.target and BNet_GetPresenceID(object.target)
 					if presenceID then
+						local presenceID, presenceName, battleTag, isBattleTagPresence, _, _, client, isOnline, _, isAFK, isDND = BNGetFriendInfoByID(presenceID)
 						button.text:SetText(object.target or UNKNOWN)
-						button.status:Show()
-						button.shadow:Show()
 						button.icon:Show()
-						button.text:SetPoint("RIGHT", button.icon, "LEFT", -2, 0)
-						-- if not thread.targetID then
-							-- thread.targetID = presenceID
-						-- end
-						local presenceID, presenceName, battleTag, isBattleTagPresence, toonName, _, client, isOnline, lastOnline, isAFK, isDND, messageText, noteText, _, broadcastTime = BNGetFriendInfoByID(presenceID)
-						-- local _, toonName, client, realmName, _, faction, race, class, _, zoneName, level, gameText = BNGetToonInfo(presenceID)
-						if isAFK then
-							button.status:SetVertexColor(1, 0.5, 0)
-						elseif isDND then
-							button.status:SetVertexColor(1, 0, 0)
-						elseif isOnline then
-							button.status:SetVertexColor(0, 1, 0)
-						else
-							button.status:SetVertexColor(0.2, 0.2, 0.2)
-						end
 						button.icon:SetTexture(BNet_GetClientTexture(client))
+						button.text:SetPoint("RIGHT", button.icon, "LEFT", -2, 0)
+						setButtonStatus(button, true, isOnline, isAFK, isDND)
 					end
 				end
 				
@@ -200,10 +196,9 @@ scrollFrame.update = function(self)
 				button.target = object.target
 				button.type = object.type
 				if button:IsMouseOver() then
-					if PM:IsThreadActive(object.target, object.type) then--or button.close:IsMouseOver() then
+					if PM:IsThreadActive(object.target, object.type) then
 						button.icon:Hide()
 						button.text:SetPoint("RIGHT", button.icon, "LEFT", -2, 0)
-					else
 					end
 				end
 			end
@@ -211,83 +206,78 @@ scrollFrame.update = function(self)
 		button:SetShown(object ~= nil)
 	end
 	
-	HybridScrollFrame_Update(self, (#all - 1) * self.buttonHeight + self.headerHeight, #self.buttons * self.buttonHeight)
+	HybridScrollFrame_Update(self, (#threadListItems - 1) * self.buttonHeight + self.headerHeight, #self.buttons * self.buttonHeight)
 end
 scrollFrame.createButton = function(self)
-	local tab = CreateFrame("Button", nil, self.scrollChild)
-	tab:SetPoint("RIGHT", self.scrollChild)
-	tab:SetScript("OnClick", onClick)
-	tab:SetScript("OnEnter", onEnter)
-	tab:SetScript("OnLeave", onLeave)
+	local button = CreateFrame("Button", nil, self.scrollChild)
+	button:SetPoint("RIGHT")
+	button:SetScript("OnClick", onClick)
+	button:SetScript("OnEnter", onEnter)
+	button:SetScript("OnLeave", onLeave)
 	
-	tab:SetHighlightTexture([[Interface\Buttons\UI-Listbox-Highlight2]])
-	tab:GetHighlightTexture():SetVertexColor(0.196, 0.388, 0.8)
+	button:SetHighlightTexture([[Interface\Buttons\UI-Listbox-Highlight2]])
+	button:GetHighlightTexture():SetVertexColor(0.196, 0.388, 0.8)
 	
-	tab.shadow = tab:CreateTexture(nil, "BACKGROUND")
-	tab.shadow:SetSize(16, 16)
-	tab.shadow:SetPoint("LEFT")
-	tab.shadow:SetTexture([[Interface\AddOns\PM\StatusBackground]])
-	tab.shadow:SetBlendMode("MOD")
+	button.shadow = button:CreateTexture(nil, "BACKGROUND")
+	button.shadow:SetSize(16, 16)
+	button.shadow:SetPoint("LEFT")
+	button.shadow:SetTexture([[Interface\AddOns\PM\StatusBackground]])
+	button.shadow:SetBlendMode("MOD")
 	
-	tab.status = tab:CreateTexture()
-	tab.status:SetSize(16, 16)
-	tab.status:SetPoint("LEFT")
-	tab.status:SetTexture([[Interface\AddOns\PM\Untitled-2]])
+	button.status = button:CreateTexture()
+	button.status:SetSize(16, 16)
+	button.status:SetPoint("LEFT")
+	button.status:SetTexture([[Interface\AddOns\PM\Untitled-2]])
 	
-	tab.text = tab:CreateFontString(nil, nil, "GameFontHighlightSmall")
-	tab.text:SetPoint("LEFT", tab.status, "RIGHT")
-	tab.text:SetJustifyH("LEFT")
+	button.text = button:CreateFontString(nil, nil, "GameFontHighlightSmall")
+	button.text:SetPoint("LEFT", button.status, "RIGHT")
+	button.text:SetJustifyH("LEFT")
 	
-	tab.icon = tab:CreateTexture()
-	tab.icon:SetSize(16, 16)
-	tab.icon:SetPoint("RIGHT", -2, 0)
+	button.icon = button:CreateTexture()
+	button.icon:SetSize(16, 16)
+	button.icon:SetPoint("RIGHT", -2, 0)
 	
-	tab.close = CreateFrame("Button", nil, tab)
-	tab.close:SetSize(16, 16)
-	tab.close:SetPoint("RIGHT", -2, 0)
-	tab.close:SetAlpha(0.5)
-	tab.close:Hide()
-	tab.close.parent = tab
+	button.close = CreateFrame("Button", nil, button)
+	button.close:SetSize(16, 16)
+	button.close:SetPoint("RIGHT", -2, 0)
+	button.close:SetAlpha(0.5)
+	button.close:Hide()
+	button.close.parent = button
 	
-	tab.close.texture = tab.close:CreateTexture()
-	tab.close.texture:SetSize(16, 16)
-	tab.close.texture:SetPoint("CENTER")
-	tab.close.texture:SetTexture([[Interface\FriendsFrame\ClearBroadcastIcon]])
+	button.close.texture = button.close:CreateTexture()
+	button.close.texture:SetSize(16, 16)
+	button.close.texture:SetPoint("CENTER")
+	button.close.texture:SetTexture([[Interface\FriendsFrame\ClearBroadcastIcon]])
 	
 	for script, handler in pairs(closeScripts) do
-		tab.close:SetScript(script, handler)
+		button.close:SetScript(script, handler)
 	end
 	
-	local flash = tab:CreateTexture()
+	local flash = button:CreateTexture()
 	flash:SetAllPoints()
 	flash:SetTexture([[Interface\Buttons\UI-Listbox-Highlight2]])
 	flash:SetVertexColor(0.196, 0.388, 0.8)
 	flash:SetAlpha(0)
 	
-	tab.flash = flash:CreateAnimationGroup()
-	tab.flash:SetLooping("BOUNCE")
+	button.flash = flash:CreateAnimationGroup()
+	button.flash:SetLooping("BOUNCE")
 	
-	local fade = tab.flash:CreateAnimation("Alpha")
+	local fade = button.flash:CreateAnimation("Alpha")
 	fade:SetChange(1)
 	fade:SetDuration(0.8)
 	fade:SetSmoothing("OUT")
 	
-	return tab
+	return button
 end
 
-
-local reverseclassnames = {}
-for k,v in pairs(LOCALIZED_CLASS_NAMES_MALE) do reverseclassnames[v] = k end
-for k,v in pairs(LOCALIZED_CLASS_NAMES_FEMALE) do reverseclassnames[v] = k end
 
 local infoPanel = CreateFrame("Frame", nil, frame)
 infoPanel:SetPoint("LEFT", insetLeft, "RIGHT", PANEL_INSET_LEFT_OFFSET, 0)
 infoPanel:SetPoint("TOPRIGHT", PANEL_INSET_RIGHT_OFFSET, PANEL_INSET_TOP_OFFSET)
 infoPanel:SetHeight(32)
-
 infoPanel:EnableMouse(true)
 infoPanel:SetScript("OnEnter", function(self)
-	local thread = PM:GetSelectedChat()
+	local thread = PM:GetSelectedThread()
 	
 	if thread.type ~= "BN_WHISPER" then return end
 	
@@ -297,8 +287,8 @@ infoPanel:SetScript("OnEnter", function(self)
 	
 	GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
 	GameTooltip:AddLine(presenceName, HIGHLIGHT_FONT_COLOR.r, HIGHLIGHT_FONT_COLOR.g, HIGHLIGHT_FONT_COLOR.b)
-	GameTooltip:AddLine(battleTag)
-	GameTooltip:AddLine(broadcastText, nil, nil, nil, true)
+	-- GameTooltip:AddLine(battleTag)
+	GameTooltip:AddLine(broadcastText, BATTLENET_FONT_COLOR.r, BATTLENET_FONT_COLOR.g, BATTLENET_FONT_COLOR.b, true)
 	GameTooltip:AddLine(noteText)
 	
 	local _, toonName, _, realmName, realmID, faction, race, class, _, zoneName, level, gameText = BNGetToonInfo(toonID)
@@ -308,9 +298,9 @@ infoPanel:SetScript("OnEnter", function(self)
 		local color = (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[reverseclassnames[class]]
 		GameTooltip:AddLine(toonName, color.r, color.g, color.b)
 		GameTooltip:AddLine(format(TOOLTIP_UNIT_LEVEL_RACE_CLASS, level, race, class))
+		GameTooltip:AddLine(zoneName)
 		GameTooltip:AddLine(realmName)
 		GameTooltip:AddLine(faction)
-		GameTooltip:AddLine(zoneName)
 	else
 		GameTooltip:AddLine(toonName)
 		GameTooltip:AddLine(gameText)
@@ -347,6 +337,10 @@ infoPanel.target:SetPoint("TOPLEFT", infoPanel.icon, "TOPRIGHT", 8, 1)
 infoPanel.toon = infoPanel:CreateFontString(nil, nil, "GameFontHighlightSmall")
 infoPanel.toon:SetPoint("BOTTOMLEFT", infoPanel.icon, "BOTTOMRIGHT", 8, -1)
 
+local function createConversation(self, target)
+	BNConversationInvite_NewConversation(BNet_GetPresenceID(target))
+end
+
 local function invite(self, target)
 	InviteUnit(Ambiguate(target, "none"))
 end
@@ -366,12 +360,17 @@ end
 	-- StaticPopup_Show("SHOW_URL", url:match("^%l+://([^/]+)"):gsub("^www%.", ""), nil, url)
 -- end
 
-local function openArchive(self, target, chatType)
-	PM:SelectArchive(target, chatType)
-	PMArchiveFrame:Show()
+local function ignore(self, target)
+	AddOrDelIgnore(Ambiguate(target, "none"))
 end
 
-local playerFactionGroup = UnitFactionGroup("player")
+local function viewFriends(self, target)
+	FriendsFriendsFrame_Show(BNet_GetPresenceID(target))
+end
+
+local function openArchive(self, target, chatType)
+	PM:SelectArchive(target, chatType)
+end
 
 local menuButton = CreateFrame("Button", nil, infoPanel)
 menuButton:SetNormalTexture([[Interface\ChatFrame\UI-ChatIcon-ScrollDown-Up]])
@@ -381,7 +380,7 @@ menuButton:SetHighlightTexture([[Interface\Buttons\UI-Common-MouseHilight]])
 menuButton:SetSize(32, 32)
 menuButton:SetPoint("RIGHT")
 menuButton:SetScript("OnClick", function(self)
-	self.menu:Toggle(PM:GetSelectedChat())
+	self.menu:Toggle(PM:GetSelectedThread())
 end)
 
 menuButton.menu = PM:CreateDropdown("Menu")
@@ -391,8 +390,19 @@ menuButton.menu.yOffset = 0
 menuButton.menu.initialize = function(self, level)
 	if level == 1 then
 		local thread = UIDROPDOWNMENU_MENU_VALUE
+		
+		if thread.type == "BN_WHISPER" then
+			local info = UIDropDownMenu_CreateInfo()
+			info.text = CREATE_CONVERSATION_WITH
+			info.func = createConversation
+			info.arg1 = thread.target
+			info.arg2 = thread.type
+			info.notCheckable = true
+			self:AddButton(info, level)
+		end
+		
 		local info = UIDropDownMenu_CreateInfo()
-		info.text = "Invite"
+		info.text = INVITE
 		info.value = thread.target
 		if thread.type == "WHISPER" then
 			info.func = invite
@@ -433,11 +443,32 @@ menuButton.menu.initialize = function(self, level)
 		info.notCheckable = true
 		self:AddButton(info, level)
 		
+		if thread.type == "WHISPER" then
+			local info = UIDropDownMenu_CreateInfo()
+			info.text = IGNORE
+			info.func = ignore
+			info.arg1 = thread.target
+			info.arg2 = thread.type
+			info.notCheckable = true
+			self:AddButton(info, level)
+		end
+		
+		if thread.type == "BN_WHISPER" then
+			local info = UIDropDownMenu_CreateInfo()
+			info.text = VIEW_FRIENDS_OF_FRIENDS
+			info.func = viewFriends
+			info.arg1 = thread.target
+			info.arg2 = thread.type
+			info.notCheckable = true
+			self:AddButton(info, level)
+		end
+		
 		local info = UIDropDownMenu_CreateInfo()
 		info.text = "View archive"
 		info.func = openArchive
 		info.arg1 = thread.target
 		info.arg2 = thread.type
+		info.disabled = (#thread.messages == 0)
 		info.notCheckable = true
 		self:AddButton(info, level)
 		
@@ -505,7 +536,7 @@ editbox:SetScript("OnEnterPressed", function(self)
 		end
 	end
 	self:SetText("")
-	PM:GetSelectedChat().editboxText = nil
+	PM:GetSelectedThread().editboxText = nil
 	if PM.db.clearEditboxFocusOnSend then
 		self:ClearFocus()
 	end
@@ -513,12 +544,12 @@ end)
 editbox:SetScript("OnEscapePressed", editbox.ClearFocus)
 editbox:SetScript("OnTabPressed", function(self)
 	-- local nextTell, nextTellType = ChatEdit_GetNextTellTarget(self:GetAttribute("tellTarget"), self:GetAttribute("chatType"))
-	-- PM:SelectChat(nextTell, nextTellType)
+	-- PM:SelectThread(nextTell, nextTellType)
 	for i, thread in ipairs(PM.db.activeThreads) do
 		if thread.target == self:GetAttribute("tellTarget") and thread.type == self:GetAttribute("chatType") then
 			if IsShiftKeyDown() then i = i - 2 end
 			local nextThread = PM.db.activeThreads[i % #PM.db.activeThreads + 1]
-			PM:SelectChat(nextThread.target, nextThread.type)
+			PM:SelectThread(nextThread.target, nextThread.type)
 			break
 		end
 	end
@@ -535,7 +566,7 @@ editbox:SetScript("OnEditFocusLost", function(self)
 end)
 editbox:SetScript("OnTextChanged", function(self, isUserInput)
 	if isUserInput and PM.db.editboxTextPerThread then
-		PM:GetSelectedChat().editboxText = self:GetText()
+		PM:GetSelectedThread().editboxText = self:GetText()
 	end
 end)
 editbox:SetScript("OnUpdate", function(self)
@@ -551,11 +582,6 @@ chatLogInset:SetPoint("TOP", infoPanel, "BOTTOM", 0, 0)
 chatLogInset:SetPoint("RIGHT", PANEL_INSET_RIGHT_OFFSET, 0)
 chatLogInset:SetPoint("LEFT", insetLeft, "RIGHT", PANEL_INSET_LEFT_OFFSET, 0)
 chatLogInset:SetPoint("BOTTOM", editbox, "TOP", 0, 4)
-
--- local stripe = addon:CreateStripe(chatPanel, "horizontal")
--- stripe:SetPoint("LEFT", 2, 0)
--- stripe:SetPoint("RIGHT", -2, 0)
--- stripe:SetPoint("BOTTOM", editbox, "TOP")
 
 local linkTypes = {
 	achievement = true,
@@ -602,35 +628,34 @@ chatLog:SetScript("OnMouseWheel", function(self, delta)
 		end
 	end
 	self.scrollToBottom:SetShown(not self:AtBottom())
-	if self:AtBottom() then
-		self.scrollToBottom.flash:Stop()
-	end
 end)
 
 
-local scrollToBottomButton = CreateFrame("Button", nil, frame)
-scrollToBottomButton:SetNormalTexture([[Interface\ChatFrame\UI-ChatIcon-ScrollEnd-Up]])
-scrollToBottomButton:SetPushedTexture([[Interface\ChatFrame\UI-ChatIcon-ScrollEnd-Down]])
-scrollToBottomButton:SetDisabledTexture([[Interface\ChatFrame\UI-ChatIcon-ScrollEnd-Disabled]])
-scrollToBottomButton:SetHighlightTexture([[Interface\Buttons\UI-Common-MouseHilight]])
-scrollToBottomButton:SetSize(32, 32)
-scrollToBottomButton:SetPoint("BOTTOMRIGHT", chatLogInset)
-scrollToBottomButton:Hide()
-scrollToBottomButton:SetScript("OnClick", function(self, button)
+local scrollToBottom = CreateFrame("Button", nil, frame)
+scrollToBottom:SetNormalTexture([[Interface\ChatFrame\UI-ChatIcon-ScrollEnd-Up]])
+scrollToBottom:SetPushedTexture([[Interface\ChatFrame\UI-ChatIcon-ScrollEnd-Down]])
+scrollToBottom:SetDisabledTexture([[Interface\ChatFrame\UI-ChatIcon-ScrollEnd-Disabled]])
+scrollToBottom:SetHighlightTexture([[Interface\Buttons\UI-Common-MouseHilight]])
+scrollToBottom:SetSize(32, 32)
+scrollToBottom:SetPoint("BOTTOMRIGHT", chatLogInset)
+scrollToBottom:Hide()
+scrollToBottom:SetScript("OnClick", function(self, button)
 	chatLog:ScrollToBottom()
 	self:Hide()
+end)
+scrollToBottom:SetScript("OnHide", function(self)
 	self.flash:Stop()
 end)
-chatLog.scrollToBottom = scrollToBottomButton
+chatLog.scrollToBottom = scrollToBottom
 
-scrollToBottomButton.flash = scrollToBottomButton:CreateTexture(nil, "OVERLAY")
-scrollToBottomButton.flash:SetAllPoints()
-scrollToBottomButton.flash:SetTexture([[Interface\ChatFrame\UI-ChatIcon-BlinkHilight]])
-scrollToBottomButton.flash:SetAlpha(0)
+scrollToBottom.flash = scrollToBottom:CreateTexture(nil, "OVERLAY")
+scrollToBottom.flash:SetAllPoints()
+scrollToBottom.flash:SetTexture([[Interface\ChatFrame\UI-ChatIcon-BlinkHilight]])
+scrollToBottom.flash:SetAlpha(0)
 
-local flash = scrollToBottomButton.flash:CreateAnimationGroup()
+local flash = scrollToBottom.flash:CreateAnimationGroup()
 flash:SetLooping("BOUNCE")
-scrollToBottomButton.flash = flash
+scrollToBottom.flash = flash
 
 local fade = flash:CreateAnimation("Alpha")
 fade:SetChange(1)
@@ -656,7 +681,6 @@ function PM:Show()
 end
 
 function PM:UpdateThreadList()
-	-- if not self.presencesReady then return end
 	scrollFrame:update()
 end
 
@@ -664,14 +688,18 @@ function PM:CreateScrollButtons()
 	scrollFrame:CreateButtons()
 end
 
-local function addBNetFriend(index)
-	local presenceID, presenceName = BNGetFriendInfo(index)
-	if not PM:IsThreadActive(presenceName, "BN_WHISPER") then
-		tinsert(all, {
-			target = presenceName,
-			type = "BN_WHISPER",
+local function insert(target, chatType)
+	if not PM:IsThreadActive(target, chatType) then
+		tinsert(threadListItems, {
+			target = target,
+			type = chatType,
 		})
 	end
+end
+
+local function addBNetFriend(index)
+	local presenceID, presenceName = BNGetFriendInfo(index)
+	insert(presenceName, "BN_WHISPER")
 end
 
 local function addWoWFriend(index)
@@ -680,19 +708,14 @@ local function addWoWFriend(index)
 	if not name:match("%-") then
 		name = name.."-"..gsub(GetRealmName(), " ", "")
 	end
-	if not PM:IsThreadActive(name, "WHISPER") then
-		tinsert(all, {
-			target = name,
-			type = "WHISPER",
-		})
-	end
+	insert(name, "WHISPER")
 end
 
 function PM:UpdateThreads()
-	wipe(all)
+	wipe(threadListItems)
 	
 	for i, thread in ipairs(self.db.activeThreads) do
-		tinsert(all, thread)
+		tinsert(threadListItems, thread)
 	end
 	
 	local numBNetTotal, numBNetOnline = BNGetNumFriends()
@@ -726,8 +749,9 @@ function PM:UpdateThreads()
 	
 	local numActiveThreads = #PM.db.activeThreads
 	
-	if (numActiveThreads > 0) and (#all > numActiveThreads) then
-		tinsert(all, numActiveThreads + 1, {separator = true})
+	if (numActiveThreads > 0) and (#threadListItems > numActiveThreads) then
+		-- insert the separator item between the active threads and the "friends list"
+		tinsert(threadListItems, numActiveThreads + 1, {separator = true})
 		scrollFrame:ExpandButton(numActiveThreads)
 	else
 		scrollFrame:CollapseButton()
@@ -738,6 +762,7 @@ end
 local function printMessage(thread, messageIndex, atTop)
 	local message = thread.messages[messageIndex]
 	local nextMessage = thread.messages[messageIndex + 1]
+	-- printing at top needs to be done in reverse order
 	if atTop then
 		if not message.active and (not nextMessage or nextMessage.active) then
 			chatLog:AddMessage(" ", 1, 1, 1, nil, atTop)
@@ -763,52 +788,47 @@ end
 
 local MAX_INSTANT_MESSAGES = 64
 
-function PM:SelectChat(target, chatType)
-	local tab = self:GetChat(target, chatType)
-	if tab == self:GetSelectedChat() then return end
-	self.selectedChat = tab
-	chatLog:Clear()
-	tab.lastTarget = nil
-	local numMessages = #tab.messages
-	-- printing too many messages at once causes a noticable screen freeze, so we apply throttling at a certain amount of messages
-	if numMessages > MAX_INSTANT_MESSAGES then
-		for i = numMessages - MAX_INSTANT_MESSAGES + 1, numMessages do
-			printMessage(tab, i)
-		end
-		self.currentThread = tab
-		self.messageThrottleIndex = numMessages - MAX_INSTANT_MESSAGES
-		self:SetOnUpdate(printThrottler)
-	else
-		for i = 1, #tab.messages do
-			printMessage(tab, i)
-		end
-		self:RemoveOnUpdate()
-	end
-	editbox:SetAttribute("chatType", chatType)
-	editbox:SetAttribute("tellTarget", target)
-	if PM.db.editboxTextPerThread then
-		editbox:SetText(tab.editboxText or "")
-	end
-	self:UpdateInfo()
+function PM:SelectThread(target, chatType)
+	local thread = self:GetThread(target, chatType)
+	if thread == self:GetSelectedThread() then return end
+	self.selectedChat = thread
 	self.db.selectedTarget = target
 	self.db.selectedType = chatType
 	if chatType == "BN_WHISPER" then
-		local presenceID = BNet_GetPresenceID(target)
-		local presenceID, presenceName, battleTag, isBattleTagPresence = BNGetFriendInfoByID(presenceID)
-		self.db.selectedBattleTag = battleTag
+		self.db.selectedBattleTag = self:GetBattleTag(target)
 	else
 		self.db.selectedBattleTag = nil
 	end
+	editbox:SetAttribute("chatType", chatType)
+	editbox:SetAttribute("tellTarget", target)
+	chatLog:Clear()
+	local numMessages = #thread.messages
+	-- printing too many messages at once causes a noticable screen freeze, so we apply throttling at a certain amount of messages
+	if numMessages > MAX_INSTANT_MESSAGES then
+		for i = numMessages - MAX_INSTANT_MESSAGES + 1, numMessages do
+			printMessage(thread, i)
+		end
+		self.currentThread = thread
+		self.messageThrottleIndex = numMessages - MAX_INSTANT_MESSAGES
+		self:SetOnUpdate(printThrottler)
+	else
+		for i = 1, #thread.messages do
+			printMessage(thread, i)
+		end
+		self:RemoveOnUpdate()
+	end
+	if PM.db.editboxTextPerThread then
+		editbox:SetText(thread.editboxText or "")
+	end
 	menuButton.menu:Close()
+	scrollToBottom:Hide()
+	scrollToBottom.flash:Stop()
+	self:UpdateInfo()
 	self:UpdateThreadList()
 	if frame:IsShown() then
-		tab.unread = nil
+		thread.unread = nil
 	end
-	scrollToBottomButton:Hide()
-	scrollToBottomButton.flash:Stop()
 end
-
-local SENDER = "|cffffffff%s"
 
 function PM:PrintMessage(thread, messageType, message, timestamp, isActive, addToTop)
 	local darken = 0.2
@@ -818,70 +838,44 @@ function PM:PrintMessage(thread, messageType, message, timestamp, isActive, addT
 		r, g, b = 0.9, 0.9, 0.9
 	end
 	if messageType then
-		-- if messageType ~= thread.lastTarget then
-			local color = HIGHLIGHT_FONT_COLOR
-			-- local r, g, b = color.r, color.g, color.b
-			-- if messageType == "out" then
-				-- r, g, b = r - darken, g - darken, b - darken
-			-- end
-			local message2
-			if messageType == "out" then
-				message2 = format(SENDER, "You")
-			else
-				local name = thread.target
-				if thread.type == "BN_WHISPER" then
-					local presenceID = BNet_GetPresenceID(name)
-					local presenceID, presenceName = BNGetFriendInfoByID(presenceID)
-					-- message = "|HBNplayer:"..arg2..":"..arg13..":"..arg11..":"..chatGroup..(chatTarget and ":"..chatTarget or "").."|h";
-					-- message = format("|HBNplayer:%s:%d:"..arg11..":"..chatGroup..(chatTarget and ":"..chatTarget or "").."|h";
-					if presenceName then
-						message2 = format(SENDER, format("|HBNplayer:%s:%d|h%s|h", presenceName, presenceID, presenceName))
-					else
-						message2 = SENDER
+		local sender
+		if messageType == "out" then
+			sender = "You"
+			r, g, b = r - darken, g - darken, b - darken
+		else
+			sender = thread.target or UNKNOWN
+			if thread.type == "WHISPER" then
+				sender = Ambiguate(sender, "none")
+				if thread.targetID then
+					local localizedClass, englishClass, localizedRace, englishRace = GetPlayerInfoByGUID(thread.targetID)
+					local color = englishClass and (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[englishClass]
+					if color then
+						sender = format("|c%s%s|r", color.colorStr, sender)
 					end
-				else
-					name = Ambiguate(name, "none")
-					if thread.targetID then
-						local localizedClass, englishClass, localizedRace, englishRace, sex = GetPlayerInfoByGUID(thread.targetID)
-						if englishClass then
-							local color = RAID_CLASS_COLORS[englishClass]
-							if color then
-								name = format("|cff%.2x%.2x%.2x%s|r", color.r * 255, color.g * 255, color.b * 255, name)
-							end
-						end
-					end
-					message2 = format(SENDER, format("|Hplayer:%s|h%s|h", Ambiguate(thread.target, "none"), name))
 				end
 			end
-			message = message2..":|r "..message
-			-- chatLog:AddMessage(message, r, g, b)
-		-- else
-			-- message = "  "..message
-		-- end
-		if messageType == "out" then
-			r, g, b = r - darken, g - darken, b - darken
 		end
+		message = "|cffffffff"..sender.."|r: "..message
 	else
 		local color = ChatTypeInfo["SYSTEM"]
 		r, g, b = color.r, color.g, color.b
-		message = format(message, thread.target)
+		message = format(message, Ambiguate(thread.target, "none"))
 	end
-	thread.lastTarget = messageType
 	local t = date("*t", timestamp)
 	chatLog:AddMessage(format("|cffd0d0d0%02d:%02d|r %s", t.hour, t.min, message), r, g, b, isActive and GetChatTypeIndex(thread.type), addToTop)
-	if not addToTop and not chatLog:AtBottom() and not scrollToBottomButton.flash:IsPlaying() then
-		scrollToBottomButton.flash:Play()
+	if not addToTop and not chatLog:AtBottom() and not scrollToBottom.flash:IsPlaying() then
+		scrollToBottom.flash:Play()
 	end
 end
 
 function PM:UpdateInfo()
-	local selectedTab = self:GetSelectedChat()
+	local selectedThread = self:GetSelectedThread()
 	local name, info, texture
 	infoPanel.icon:SetHeight(24)
-	if selectedTab.type == "BN_WHISPER" then
-		local presenceID = BNet_GetPresenceID(selectedTab.target)
-		if not selectedTab.targetID then
-			selectedTab.targetID = presenceID
+	if selectedThread.type == "BN_WHISPER" then
+		local presenceID = BNet_GetPresenceID(selectedThread.target)
+		if not selectedThread.targetID then
+			selectedThread.targetID = presenceID
 		end
 		local _, presenceName, battleTag, isBattleTagPresence, toonName, toonID, client, isOnline, lastOnline, isAFK, isDND = BNGetFriendInfoByID(presenceID)
 		local _, toonName, _, realmName, _, faction, race, class, _, zoneName, level, gameText = BNGetToonInfo(toonID or presenceID)
@@ -907,7 +901,7 @@ function PM:UpdateInfo()
 		texture = BNet_GetClientTexture(client)
 	else
 		-- try various means of getting information about the target
-		local name = Ambiguate(selectedTab.target, "none")
+		local name = Ambiguate(selectedThread.target, "none")
 		-- Unit* API, in case they're in the group
 		local level = UnitLevel(name)
 		if level > 0 then
@@ -918,24 +912,28 @@ function PM:UpdateInfo()
 		end
 		-- friend list
 		local isFriend, connected, status, level, class, area = self:GetFriendInfo(name)
-		if connected and level and level > 0 then
+		if isFriend and connected and level and level > 0 then
 			info = format("Level %d %s - %s", level, class, area)
+			-- if englishClass then
+				infoPanel.icon:SetTexCoord(unpack(CLASS_ICON_TCOORDS[reverseclassnames[class]]))
+				texture = [[Interface\Glues\CharacterCreate\UI-CharacterCreate-Classes]]
+			-- end
 		end
 		-- or GUID from chat event
-		if not info and selectedTab.targetID then
-			local localizedClass, englishClass, localizedRace, englishRace = GetPlayerInfoByGUID(selectedTab.targetID)
+		if not info and selectedThread.targetID then
+			local localizedClass, englishClass, localizedRace, englishRace = GetPlayerInfoByGUID(selectedThread.targetID)
 			if englishClass then
 				infoPanel.icon:SetTexCoord(unpack(CLASS_ICON_TCOORDS[englishClass]))
 				texture = [[Interface\Glues\CharacterCreate\UI-CharacterCreate-Classes]]
 				info = localizedClass
 			end
-		elseif selectedTab.isGM then
+		elseif selectedThread.isGM then
 			infoPanel.icon:SetHeight(12)
 			infoPanel.icon:SetTexCoord(0, 1, 0, 1)
 			texture = [[Interface\ChatFrame\UI-ChatIcon-Blizz]]
 		end
 	end
 	infoPanel.icon:SetTexture(texture)
-	infoPanel.target:SetText(name or Ambiguate(selectedTab.target, "none"))
+	infoPanel.target:SetText(name or Ambiguate(selectedThread.target, "none"))
 	infoPanel.toon:SetText(info)
 end
