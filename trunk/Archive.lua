@@ -12,7 +12,7 @@ frame:SetToplevel(true)
 frame:Hide()
 
 local inset = CreateFrame("Frame", nil, frame, "InsetFrameTemplate")
-inset:SetPoint("TOPLEFT", PANEL_INSET_LEFT_OFFSET, -80)
+inset:SetPoint("TOPLEFT", PANEL_INSET_LEFT_OFFSET, PANEL_INSET_ATTIC_OFFSET)
 inset:SetPoint("BOTTOMRIGHT", PANEL_INSET_RIGHT_OFFSET, PANEL_INSET_BOTTOM_OFFSET + 2)
 
 local function onClick(self, target, chatType)
@@ -20,14 +20,14 @@ local function onClick(self, target, chatType)
 end
 
 local menu = PM:CreateDropdown("Frame", frame)
-menu:SetWidth(128)
+menu:SetWidth(140)
 menu:SetPoint("TOPLEFT", 0, -29)
 menu:JustifyText("LEFT")
 menu.initialize = function(self)
 	for i, thread in ipairs(PM.db.threads) do
 		if #thread.messages > 0 then
 			local info = UIDropDownMenu_CreateInfo()
-			info.text = Ambiguate(thread.target, "none")
+			info.text = Ambiguate(thread.target or UNKNOWN, "none")
 			info.func = onClick
 			info.arg1 = thread.target
 			info.arg2 = thread.type
@@ -41,7 +41,7 @@ local archive = CreateFrame("ScrollFrame", "PMArchiveLog", inset, "UIPanelScroll
 archive:SetPoint("TOPLEFT", 6, -6)
 archive:SetPoint("BOTTOMRIGHT", -30, 6)
 
-local archiveLog = CreateFrame("EditBox", nil, archive)
+local archiveLog = CreateFrame("EditBox")
 archiveLog:SetSize(archive:GetWidth(), archive:GetHeight())
 archiveLog:SetFontObject(ChatFontNormal)
 archiveLog:SetAutoFocus(false)
@@ -70,7 +70,7 @@ local function printLog()
 	local color = ChatTypeInfo[selectedLogType]
 	local thread = PM:GetThread(selectedLog, selectedLogType)
 	
-	local target = selectedLog
+	local target = selectedLog or UNKNOWN
 	if selectedLogType == "WHISPER" then
 		target = Ambiguate(target, "none")
 		if thread.targetID then
@@ -149,6 +149,7 @@ searchBox:SetScript("OnTextChanged", function(self, isUserInput)
 			self:SetTextColor(1, 1, 1)
 		else
 			self:SetTextColor(RED_FONT_COLOR.r, RED_FONT_COLOR.g, RED_FONT_COLOR.b)
+			archiveLog:HighlightText(0, 0)
 		end
 	end
 end)
@@ -160,21 +161,77 @@ searchBox:SetScript("OnEnterPressed", function(self)
 	end
 end)
 
-local purgeButton = CreateFrame("Button", "PMArchivePurgeButton", frame, "UIMenuButtonStretchTemplate")
-purgeButton:SetWidth(64)
+local purgeOptions = {
+	{
+		text = "Purge archived messages only",
+		func = function(self)
+			local thread = PM:GetThread(selectedLog, selectedLogType)
+			local messages = thread.messages
+			for i = #messages, 1, -1 do
+				local message = messages[i]
+				if not message.active then
+					tremove(messages, i)
+				end
+			end
+			if #messages == 0 and not PM:IsThreadActive(thread.target, thread.type) then
+				PM:DeleteThread(thread.target, thread.type)
+				archiveLog:SetText("")
+				menu:SetText(nil)
+			end
+			printLog()
+		end,
+	},
+	{
+		text = "Purge all messages",
+		func = function(self)
+			local thread = PM:GetThread(selectedLog, selectedLogType)
+			wipe(thread.messages)
+			if not PM:IsThreadActive(thread.target, thread.type) then
+				PM:DeleteThread(thread.target, thread.type)
+			end
+			archiveLog:SetText("")
+			menu:SetText(nil)
+		end,
+	},
+	{
+		text = "Purge all messages and close thread",
+		func = function(self)
+			PM:CloseChat(selectedLog, selectedLogType)
+			PM:DeleteThread(selectedLog, selectedLogType)
+			archiveLog:SetText("")
+			menu:SetText(nil)
+		end,
+	},
+}
+
+local purgeButton = PM:CreateButton(frame)
+purgeButton:SetWidth(80)
 purgeButton:SetPoint("LEFT", menu, "RIGHT", -4, 2)
 purgeButton:SetText("Purge")
+purgeButton.rightArrow:Show()
 purgeButton:SetScript("OnClick", function(self)
-	PM:CloseChat(selectedLog, selectedLogType)
-	PM:DeleteThread(selectedLog, selectedLogType)
-	archiveLog:SetText("")
-	menu:SetText(nil)
+	self.menu:Toggle()
 end)
+
+purgeButton.menu = PM:CreateDropdown("Menu")
+purgeButton.menu.xOffset = 0
+purgeButton.menu.yOffset = 0
+purgeButton.menu.relativeTo = purgeButton
+purgeButton.menu.initialize = function(self)
+	for index = 1, #purgeOptions do
+		local value = purgeOptions[index]
+		if value.text then
+			value.index = index
+			value.notCheckable = true
+			self:AddButton(value, level)
+		end
+	end
+end
 
 function PM:SelectArchive(target, chatType)
 	selectedLog = target
 	selectedLogType = chatType
 	printLog()
-	menu:SetText(Ambiguate(target, "none"))
+	menu:SetText(Ambiguate(target or UNKNOWN, "none"))
 	frame:Show()
 end

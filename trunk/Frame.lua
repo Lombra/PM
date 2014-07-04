@@ -137,9 +137,8 @@ scrollFrame.update = function(self)
 				button.text:SetText(nil)
 				button.close:Hide()
 				button.icon:Hide()
-				button.status:Hide()
-				button.shadow:Hide()
 				button.flash:Stop()
+				setButtonStatus(button, false)
 				separator:SetAllPoints(button)
 				separator:Show()
 			else
@@ -189,6 +188,9 @@ scrollFrame.update = function(self)
 						button.icon:SetTexture(BNet_GetClientTexture(client))
 						button.text:SetPoint("RIGHT", button.icon, "LEFT", -2, 0)
 						setButtonStatus(button, true, isOnline, isAFK, isDND)
+					else
+						button.text:SetText(UNKNOWN)
+						setButtonStatus(button, false)
 					end
 				end
 				
@@ -795,7 +797,7 @@ function PM:SelectThread(target, chatType)
 	self.db.selectedTarget = target
 	self.db.selectedType = chatType
 	if chatType == "BN_WHISPER" then
-		self.db.selectedBattleTag = self:GetBattleTag(target)
+		self.db.selectedBattleTag = thread.battleTag
 	else
 		self.db.selectedBattleTag = nil
 	end
@@ -873,11 +875,14 @@ function PM:UpdateInfo()
 	local name, info, texture
 	infoPanel.icon:SetHeight(24)
 	if selectedThread.type == "BN_WHISPER" then
+		if not selectedThread.target then
+			name = UNKNOWN
+		else
 		local presenceID = BNet_GetPresenceID(selectedThread.target)
 		if not selectedThread.targetID then
 			selectedThread.targetID = presenceID
 		end
-		local _, presenceName, battleTag, isBattleTagPresence, toonName, toonID, client, isOnline, lastOnline, isAFK, isDND = BNGetFriendInfoByID(presenceID)
+		local _, presenceName, _, _, toonName, toonID, client, isOnline, lastOnline, isAFK, isDND = BNGetFriendInfoByID(presenceID)
 		local _, toonName, _, realmName, _, faction, race, class, _, zoneName, level, gameText = BNGetToonInfo(toonID or presenceID)
 		infoPanel.icon:SetTexCoord(0, 1, 0, 1)
 		name = presenceName or UNKNOWN
@@ -899,6 +904,7 @@ function PM:UpdateInfo()
 			end
 		end
 		texture = BNet_GetClientTexture(client)
+		end
 	else
 		-- try various means of getting information about the target
 		local name = Ambiguate(selectedThread.target, "none")
