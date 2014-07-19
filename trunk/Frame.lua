@@ -39,6 +39,54 @@ insetLeft:SetPoint("BOTTOM", 0, PANEL_INSET_BOTTOM_OFFSET + 2)
 PM.threadListInset = insetLeft
 
 
+local function createScrollButton(listFrame)
+	local button = CreateFrame("Button", nil, insetLeft)
+	button:SetHeight(10)
+	button:SetPoint("LEFT")
+	button:SetPoint("RIGHT")
+	button:SetScript("OnClick", scroll)
+	button:SetScript("OnEnter", onEnter)
+	button:SetScript("OnLeave", onLeave)
+	button:SetScript("OnMouseDown", onMouseDown)
+	button:SetScript("OnMouseUp", onMouseUp)
+	button:SetScript("OnHide", onHide)
+	local t = insetLeft:CreateTexture(nil, "BACKGROUND")
+	t:SetAllPoints(button)
+	t:SetTexture([[Interface\Buttons\UI-Listbox-Highlight2]])
+	t:SetVertexColor(0.6, 0.75, 1.0, 0.5)
+	-- t:SetVertexColor(1.7, 1.7, 1.7, 0.5)
+	-- t:SetTexCoord(0, 1, 0, 14/16)
+	button.texture = button:CreateTexture()
+	button.texture:SetSize(16, 16)
+	button.texture:SetPoint("CENTER")
+	button.texture:SetTexture([[Interface\Calendar\MoreArrow]])
+	-- button.texture:SetVertexColor(0.5, 0.5, 0.5)
+	return button
+end
+
+local scrollUp = createScrollButton()
+scrollUp:SetPoint("TOP", 0, -2)
+scrollUp.delta = 1
+scrollUp.texture:SetTexCoord(0, 1, 1, 0)
+scrollUp.texture:SetPoint("BOTTOM")
+
+local t = insetLeft:CreateTexture()
+t:SetPoint("BOTTOMLEFT", scrollUp, 3, -2)
+t:SetPoint("RIGHT", -3, 0)
+t:SetHeight(1)
+t:SetTexture(0.5, 0.5, 0.5)
+
+local scrollDown = createScrollButton()
+scrollDown:SetPoint("BOTTOM", 0, 2)
+scrollDown.delta = -1
+scrollDown.texture:SetPoint("TOP")
+
+local t = insetLeft:CreateTexture()
+t:SetPoint("TOPLEFT", scrollDown, 3, 2)
+t:SetPoint("RIGHT", -3, 0)
+t:SetHeight(1)
+t:SetTexture(0.5, 0.5, 0.5)
+
 local function onClick(self)
 	local target, type = self.target, self.type
 	if not PM:IsThreadActive(target, type) then
@@ -86,7 +134,7 @@ local closeScripts = {
 		end
 	end,
 	OnClick = function(self)
-		PM:CloseChat(self.parent.target, self.parent.type)
+		PM:CloseThread(self.parent.target, self.parent.type)
 	end,
 	OnMouseDown = function(self)
 		self.texture:SetPoint("CENTER", 1, -1)
@@ -114,11 +162,11 @@ end
 
 local scrollFrame = PM:CreateScrollFrame("Hybrid", insetLeft)
 PM.scroll = scrollFrame
-local separator = scrollFrame:CreateTexture()
+local separator = scrollFrame.scrollChild:CreateTexture()
 separator:SetTexture([[Interface\FriendsFrame\UI-FriendsFrame-OnlineDivider]])
 separator:SetTexCoord(0, 1, 3/16, 0.75)
-scrollFrame:SetPoint("TOPRIGHT", -4, -4)
-scrollFrame:SetPoint("BOTTOMLEFT", 4, 4)
+scrollFrame:SetPoint("TOPRIGHT", scrollUp, "BOTTOMRIGHT", -4, -2)
+scrollFrame:SetPoint("BOTTOMLEFT", scrollDown, "TOPLEFT", 4, 4)
 scrollFrame:SetButtonHeight(16)
 scrollFrame:SetHeaderHeight(9)
 scrollFrame.update = function(self)
@@ -209,9 +257,11 @@ scrollFrame.update = function(self)
 	end
 	
 	HybridScrollFrame_Update(self, (#threadListItems - 1) * self.buttonHeight + self.headerHeight, #self.buttons * self.buttonHeight)
+	
+	self.scrollBar:Hide()
 end
-scrollFrame.createButton = function(self)
-	local button = CreateFrame("Button", nil, self.scrollChild)
+scrollFrame.createButton = function(parent)
+	local button = CreateFrame("Button", nil, parent)
 	button:SetPoint("RIGHT")
 	button:SetScript("OnClick", onClick)
 	button:SetScript("OnEnter", onEnter)
@@ -271,6 +321,25 @@ scrollFrame.createButton = function(self)
 	
 	return button
 end
+
+scrollFrame.scrollBar:HookScript("OnValueChanged", function(self, value)
+	local min, max = self:GetMinMaxValues()
+	scrollUp.texture:SetDesaturated(value == min)
+	scrollDown.texture:SetDesaturated(value == max)
+	-- scrollUp:SetShown(value > min)
+	-- scrollDown:SetShown(value < max)
+	-- print(self.offset, self.range)
+end)
+
+scrollFrame:SetScript("OnMouseWheel", function(self, delta, stepSize)
+	local minVal, maxVal = 0, self.range
+	stepSize = stepSize or self.stepSize or self.buttonHeight
+	if delta == 1 then
+		self.scrollBar:SetValue(max(minVal, self.scrollBar:GetValue() - stepSize))
+	else
+		self.scrollBar:SetValue(min(maxVal, self.scrollBar:GetValue() + stepSize))
+	end
+end)
 
 
 local infoPanel = CreateFrame("Frame", nil, frame)
@@ -509,6 +578,7 @@ editbox:SetPoint("LEFT", insetLeft, "RIGHT", 9, 0)
 editbox:SetPoint("BOTTOMRIGHT", -6, 5)
 editbox:SetFontObject("ChatFontSmall")
 editbox:SetAutoFocus(false)
+editbox:SetMaxLetters(255)
 editbox:SetScript("OnEnterPressed", function(self)
 	local type = self:GetAttribute("chatType")
 	local text = self:GetText()
@@ -584,6 +654,7 @@ chatLogInset:SetPoint("TOP", infoPanel, "BOTTOM", 0, 0)
 chatLogInset:SetPoint("RIGHT", PANEL_INSET_RIGHT_OFFSET, 0)
 chatLogInset:SetPoint("LEFT", insetLeft, "RIGHT", PANEL_INSET_LEFT_OFFSET, 0)
 chatLogInset:SetPoint("BOTTOM", editbox, "TOP", 0, 4)
+PM.chatlogInset = chatLogInset
 
 local linkTypes = {
 	achievement = true,
@@ -629,7 +700,10 @@ chatLog:SetScript("OnMouseWheel", function(self, delta)
 			self:ScrollDown()
 		end
 	end
-	self.scrollToBottom:SetShown(not self:AtBottom())
+end)
+chatLog:SetScript("OnMessageScrollChanged", function(self)
+	local atBottom = self:AtBottom()
+	self.scrollToBottom:SetShown(not atBottom)
 end)
 
 
@@ -643,7 +717,7 @@ scrollToBottom:SetPoint("BOTTOMRIGHT", chatLogInset)
 scrollToBottom:Hide()
 scrollToBottom:SetScript("OnClick", function(self, button)
 	chatLog:ScrollToBottom()
-	self:Hide()
+	-- self:Hide()
 end)
 scrollToBottom:SetScript("OnHide", function(self)
 	self.flash:Stop()
@@ -673,9 +747,18 @@ fade:SetSmoothing("OUT")
 -- BN_WHISPER_INFORM
 
 function PM:UPDATE_CHAT_COLOR(chatType, r, g, b)
-	local info = ChatTypeInfo[chatType]
-	-- if not info then print(chatType) return end
+	if not self.db.useDefaultColor[chatType] then return end
 	chatLog:UpdateColorByID(GetChatTypeIndex(chatType), r, g, b)
+	chatLog:UpdateColorByID(GetChatTypeIndex(chatType.."_INFORM"), r, g, b)
+end
+
+function PM:UpdateChatColor(chatType, r, g, b)
+	local color = self.db.useDefaultColor[chatType] and ChatTypeInfo[chatType] or self.db.color[chatType]
+	chatLog:UpdateColorByID(GetChatTypeIndex(chatType), color.r, color.g, color.b)
+	if not self.db.useDefaultColor[chatType] and self.db.separateOutgoingColor then
+		color = self.db.color[chatType.."_INFORM"]
+	end
+	chatLog:UpdateColorByID(GetChatTypeIndex(chatType.."_INFORM"), color.r, color.g, color.b)
 end
 
 function PM:Show()
@@ -761,34 +844,53 @@ function PM:UpdateThreads()
 	self:UpdateThreadList()
 end
 
-local function printMessage(thread, messageIndex, atTop)
-	local message = thread.messages[messageIndex]
-	local nextMessage = thread.messages[messageIndex + 1]
+local function printMessage(thread, messageIndex, addToTop)
+	local message1 = thread.messages[messageIndex]
+	local message2 = thread.messages[messageIndex + 1]
 	-- printing at top needs to be done in reverse order
-	if atTop then
-		if not message.active and (not nextMessage or nextMessage.active) then
-			chatLog:AddMessage(" ", 1, 1, 1, nil, atTop)
-			chatLog:AddMessage(" "..date("%Y-%m-%d", message.timestamp), 0.8, 0.8, 0.8, nil, atTop)
-		end
-		PM:PrintMessage(thread, message.messageType, message.text, message.timestamp, message.active, atTop)
-	else
-		PM:PrintMessage(thread, message.messageType, message.text, message.timestamp, message.active, atTop)
-		if not message.active and (not nextMessage or nextMessage.active) then
-			chatLog:AddMessage(" "..date("%Y-%m-%d", message.timestamp), 0.8, 0.8, 0.8, nil, atTop)
-			chatLog:AddMessage(" ", nil, nil, nil, nil, atTop)
-		end
+	if not addToTop then
+		PM:PrintMessage(thread, message1, addToTop)
 	end
-end
-
-local function printThrottler(self, elapsed)
-	printMessage(self.currentThread, self.messageThrottleIndex, true)
-	self.messageThrottleIndex = self.messageThrottleIndex - 1
-	if self.messageThrottleIndex == 0 then
-		self:RemoveOnUpdate()
+	local currentTime = date("*t", time())
+	local time = date("*t", message1.timestamp)
+	local nextTime = message2 and date("*t", message2.timestamp)
+	if message2 and (nextTime.yday ~= time.yday or nextTime.year ~= time.year) then
+		if addToTop then
+			message1, message2 = message2, message1
+		end
+		local time = date("*t", message1.timestamp)
+		local nextTime = message2 and date("*t", message2.timestamp)
+		local t1 = date("%B %d", message1.timestamp)
+		if (currentTime.yday == time.yday and currentTime.year == time.year) then
+			t1 = HONOR_TODAY
+		end
+		local t2 = date("%B %d", message2.timestamp)
+		if (currentTime.yday == nextTime.yday and currentTime.year == nextTime.year) then
+			t2 = HONOR_TODAY
+		end
+		chatLog:AddMessage("- "..t1, 0.8, 0.8, 0.8, nil, addToTop)
+		chatLog:AddMessage(" ", 1, 1, 1, nil, addToTop)
+		chatLog:AddMessage("- "..t2, 0.8, 0.8, 0.8, nil, addToTop)
+	elseif not message1.active and (not message2 or message2.active) then
+		chatLog:AddMessage(" ", 1, 1, 1, nil, addToTop)
+	end
+	if addToTop then
+		PM:PrintMessage(thread, message1, addToTop)
 	end
 end
 
 local MAX_INSTANT_MESSAGES = 64
+
+local function printThrottler(self, elapsed)
+	for i = 1, MAX_INSTANT_MESSAGES do
+		printMessage(self.currentThread, self.messageThrottleIndex, true)
+		self.messageThrottleIndex = self.messageThrottleIndex - 1
+		if self.messageThrottleIndex == 0 then
+			self:RemoveOnUpdate()
+			break
+		end
+	end
+end
 
 function PM:SelectThread(target, chatType)
 	local thread = self:GetThread(target, chatType)
@@ -803,6 +905,22 @@ function PM:SelectThread(target, chatType)
 	end
 	editbox:SetAttribute("chatType", chatType)
 	editbox:SetAttribute("tellTarget", target)
+	self:RefreshThread(thread)
+	if PM.db.editboxTextPerThread then
+		editbox:SetText(thread.editboxText or "")
+	end
+	menuButton.menu:Close()
+	scrollToBottom:Hide()
+	-- scrollToBottom.flash:Stop()
+	self:UpdateInfo()
+	self:UpdateThreadList()
+	if frame:IsShown() then
+		thread.unread = nil
+	end
+end
+
+function PM:RefreshThread(thread)
+	if not thread then return end
 	chatLog:Clear()
 	local numMessages = #thread.messages
 	-- printing too many messages at once causes a noticable screen freeze, so we apply throttling at a certain amount of messages
@@ -819,52 +937,47 @@ function PM:SelectThread(target, chatType)
 		end
 		self:RemoveOnUpdate()
 	end
-	if PM.db.editboxTextPerThread then
-		editbox:SetText(thread.editboxText or "")
-	end
-	menuButton.menu:Close()
-	scrollToBottom:Hide()
-	scrollToBottom.flash:Stop()
-	self:UpdateInfo()
-	self:UpdateThreadList()
-	if frame:IsShown() then
-		thread.unread = nil
-	end
 end
 
-function PM:PrintMessage(thread, messageType, message, timestamp, isActive, addToTop)
-	local darken = 0.2
-	local color = self.db.useDefaultColor[thread.type] and ChatTypeInfo[thread.type] or self.db.color[thread.type]
+local darken = 0.2
+
+function PM:PrintMessage(thread, message, addToTop)
+	local messageType, message, timestamp, isActive = message.messageType, message.text, message.timestamp, message.active
+	local chatType = thread.type
+	local color = self.db.useDefaultColor[chatType] and ChatTypeInfo[chatType] or self.db.color[chatType]
 	local r, g, b = color.r, color.g, color.b
 	if not isActive then
 		r, g, b = 0.9, 0.9, 0.9
+		if messageType == "out" then
+			r, g, b = r - darken, g - darken, b - darken
+		end
 	end
 	if messageType then
-		local sender
-		if messageType == "out" then
-			sender = "You"
-			r, g, b = r - darken, g - darken, b - darken
-		else
-			sender = thread.target or UNKNOWN
-			if thread.type == "WHISPER" then
-				sender = Ambiguate(sender, "none")
-				if thread.targetID then
-					local localizedClass, englishClass, localizedRace, englishRace = GetPlayerInfoByGUID(thread.targetID)
-					local color = englishClass and (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[englishClass]
-					if color then
-						sender = format("|c%s%s|r", color.colorStr, sender)
+			local sender
+			if messageType == "out" then
+				sender = "You"
+				chatType = chatType.."_INFORM"
+			else
+				sender = thread.target or UNKNOWN
+				if thread.type == "WHISPER" then
+					sender = Ambiguate(sender, "none")
+					if thread.targetID and self.db.classColors then
+						local localizedClass, englishClass, localizedRace, englishRace = GetPlayerInfoByGUID(thread.targetID)
+						local color = englishClass and (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[englishClass]
+						if color then
+							sender = format("|c%s%s|r", color.colorStr, sender)
+						end
 					end
 				end
+				sender = "|cff56a3ff"..sender.."|r"
 			end
-		end
-		message = "|cffffffff"..sender.."|r: "..message
+			message = "|cffffffff"..sender.."|r: "..message
 	else
 		local color = ChatTypeInfo["SYSTEM"]
 		r, g, b = color.r, color.g, color.b
 		message = format(message, Ambiguate(thread.target, "none"))
 	end
-	local t = date("*t", timestamp)
-	chatLog:AddMessage(format("|cffd0d0d0%02d:%02d|r %s", t.hour, t.min, message), r, g, b, isActive and GetChatTypeIndex(thread.type), addToTop)
+	chatLog:AddMessage((self.db.timestamps and format("|cffd0d0d0%s|r", date(self.db.timestampFormat, timestamp)) or "")..message, r, g, b, isActive and GetChatTypeIndex(chatType), addToTop, accessID, extraData)
 	if not addToTop and not chatLog:AtBottom() and not scrollToBottom.flash:IsPlaying() then
 		scrollToBottom.flash:Play()
 	end
