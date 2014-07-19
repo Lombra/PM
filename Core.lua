@@ -28,9 +28,6 @@ local function copyDefaults(src, dst)
 	return dst
 end
 
-local whisperColor = ChatTypeInfo["WHISPER"]
-local bnetWhisperColor = ChatTypeInfo["BN_WHISPER"]
-
 local defaults = {
 	activeThreads = {},
 	threads = {},
@@ -45,17 +42,11 @@ local defaults = {
 	font = "Arial Narrow",
 	fontSize = 12,
 	
-	threadListWoWFriends = true,
+	sound = "TellMessage",
+	
 	threadListBNetFriends = true,
+	threadListWoWFriends = true,
 	threadListShowOffline = false,
-	useDefaultColor = {
-		WHISPER = true,
-		BN_WHISPER = true,
-	},
-	color = {
-		WHISPER = {r = whisperColor.r, g = whisperColor.g, b = whisperColor.b},
-		BN_WHISPER = {r = bnetWhisperColor.r, g = bnetWhisperColor.g, b = bnetWhisperColor.b},
-	},
 	
 	clearEditboxFocusOnSend = true,
 	clearEditboxOnFocusLost = true,
@@ -64,17 +55,36 @@ local defaults = {
 	defaultHandlerWhileSuppressed = true,
 	suppress = {
 		combat = false,
-		dnd = false,
 		encounter = false,
+		pvp = false,
+		dnd = false,
 	},
+	closeThreadsOnLogout = false,
 	
 	autoCleanArchive = {
-		WHISPER = true,
 		BN_WHISPER = true,
+		WHISPER = true,
 	},
 	archiveKeep = {
-		WHISPER = 0,
 		BN_WHISPER = 7 * 24 * 3600,
+		WHISPER = 0,
+	},
+	
+	timestamps = true,
+	timestampFormat = "%H:%M ",
+	indentWrap = true,
+	
+	classColors = true,
+	separateOutgoingColor = false,
+	useDefaultColor = {
+		BN_WHISPER = true,
+		WHISPER = true,
+	},
+	color = {
+		BN_WHISPER = {r = 0, g = 1.0, b = 246/255},
+		BN_WHISPER_INFORM = {r = 0, g = 1.0, b = 246/255},
+		WHISPER = {r = 1.0, g = 0.5, b = 1.0},
+		WHISPER_INFORM = {r = 1.0, g = 0.5, b = 1.0},
 	},
 }
 
@@ -111,10 +121,20 @@ function PM:OnInitialize()
 	self:UpdatePresences()
 	self:LoadSettings()
 	
+	local LSM = LibStub("LibSharedMedia-3.0")
+	if not LSM:IsValid("font", self.db.font) then
+		LSM.RegisterCallback(self, "LibSharedMedia_Registered", function(event, mediaType, key)
+			if key == PM.db.font then
+				PM.chatLog:SetFont(LSM:Fetch("font", key), PM.db.fontSize)
+				LSM.UnregisterCallback(self, event)
+			end
+		end)
+	end
+	
 	-- print("BNIsSelf:", BNIsSelf(BNGetInfo()))
 	
 	self:RegisterEvent("PLAYER_ENTERING_WORLD")
-	self:RegisterEvent("PLAYER_LOGOUT", "CleanArchive")
+	self:RegisterEvent("PLAYER_LOGOUT")
 	self:RegisterEvent("UPDATE_CHAT_COLOR")
 	self:RegisterEvent("FRIENDLIST_UPDATE")
 	self:RegisterEvent("BN_FRIEND_INFO_CHANGED")
@@ -140,6 +160,17 @@ function PM:PLAYER_ENTERING_WORLD()
 		PM:SelectThread(self.db.selectedTarget, self.db.selectedType)
 	end
 	self:UnregisterEvent("PLAYER_ENTERING_WORLD")
+end
+
+function PM:PLAYER_LOGOUT()
+	local activeThreads = self.db.activeThreads
+	if self.db.closeThreadsOnLogout then
+		for i = #activeThreads, 1, -1 do
+			local thread = activeThreads[i]
+			self:CloseThread(thread.target, thread.type)
+		end
+	end
+	self:CleanArchive()
 end
 
 function PM:GetFriendInfo(name)
@@ -259,7 +290,7 @@ function PM:CleanArchive()
 				end
 			end
 			if #messages == 0 and not self:IsThreadActive(thread.target, thread.type) then
-				-- self:CloseChat(thread.target, thread.type)
+				-- self:CloseThread(thread.target, thread.type)
 				self:DeleteThread(thread.target, thread.type)
 			end
 		end
@@ -325,7 +356,7 @@ function PM:ActivateThread(target, chatType)
 	return thread
 end
 
-function PM:CloseChat(target, chatType)
+function PM:CloseThread(target, chatType)
 	local activeThreads = self.db.activeThreads
 	for i, thread in ipairs(activeThreads) do
 		if thread.target == target and thread.type == chatType then
@@ -342,6 +373,7 @@ function PM:CloseChat(target, chatType)
 				local thread = activeThreads[i] or activeThreads[i - 1]
 				self:SelectThread(thread.target, thread.type)
 			end
+			-- remove informational messages, such as system messages
 			for i = #thread.messages, 1, -1 do
 				local message = thread.messages[i]
 				if not message.messageType then

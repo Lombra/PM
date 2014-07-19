@@ -1,4 +1,5 @@
 local addonName, PM = ...
+local LSM = LibStub("LibSharedMedia-3.0")
 
 
 hooksecurefunc("ChatEdit_SetLastTellTarget", function(target, chatType)
@@ -149,7 +150,7 @@ function PM:HandleChatEvent(event, ...)
 	self:Show()
 	if messageType == "in" then
 		ChatEdit_SetLastTellTarget(sender, chatType)
-		PlaySound("TellMessage", "MASTER")
+		PlaySoundFile(LSM:Fetch("sound", self.db.sound), "MASTER")
 		-- PlaySoundFile([[Interface\AddOns\PM\Whisper.ogg]], "MASTER")
 	end
 end
@@ -194,29 +195,45 @@ function PM:CHAT_MSG_SYSTEM(...)
 	end
 end
 
+local suppress = {
+	combat = function() return UnitAffectingCombat("player") end,
+	encounter = IsEncounterInProgress,
+	pvp = function()
+		for i = 1, 40 do
+			local spellID = select(11, UnitBuff("player", i))
+			if spellID == 44521 or spellID == 32727 then
+				return true
+			end
+		end
+	end,
+	dnd = IsChatDND,
+}
+
 -- this function deterrmines whether chat messages should be sent to the addon or the default chat frame (true for send to chat frame)
 function PM:ShouldSuppress()
 	if PMFrame:IsShown() then
 		-- always send to addon if it's already shown
 		return false
 	end
-	return
-		(self.db.suppress.combat and UnitAffectingCombat("player")) or
-		(self.db.suppress.dnd and IsChatDND()) or
-		(self.db.suppress.encounter and IsEncounterInProgress())
+	for k, v in pairs(suppress) do
+		if self.db.suppress[k] and v() then
+			return true
+		end
+	end
 end
 
-function PM:SaveMessage(target, chatType, messageType, message)
+function PM:SaveMessage(target, chatType, messageType, messageText)
 	local thread = self:GetThread(target, chatType)
-	tinsert(thread.messages, {
+	local message = {
 		messageType = messageType,
-		text = message,
+		text = messageText,
 		timestamp = time(),
 		-- from = sender,
 		active = true,
 		unread = true,
-	})
+	}
+	tinsert(thread.messages, message)
 	if thread == self:GetSelectedThread() then
-		self:PrintMessage(thread, messageType, message, time(), true)
+		self:PrintMessage(thread, message)
 	end
 end
