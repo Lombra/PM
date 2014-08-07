@@ -105,7 +105,7 @@ local function onEnter(self)
 end
 
 local function onLeave(self)
-	if PM:IsThreadActive(self.target, self.type) and not self.close:IsMouseOver() then
+	if PM:IsThreadActive(self.target, self.type) and GetMouseFocus() ~= self.close then
 		self.close:Hide()
 		local thread = PM:GetThread(self.target, self.type)
 		if not self.selected then
@@ -129,7 +129,7 @@ local closeScripts = {
 	end,
 	OnLeave = function(self)
 		self:SetAlpha(0.5)
-		if not self.parent:IsMouseOver() then
+		if GetMouseFocus() ~= self.parent then
 			onLeave(self.parent)
 		end
 	end,
@@ -169,96 +169,85 @@ scrollFrame:SetPoint("TOPRIGHT", scrollUp, "BOTTOMRIGHT", -4, -2)
 scrollFrame:SetPoint("BOTTOMLEFT", scrollDown, "TOPLEFT", 4, 4)
 scrollFrame:SetButtonHeight(16)
 scrollFrame:SetHeaderHeight(9)
-scrollFrame.update = function(self)
-	self = scrollFrame
-	separator:Hide()
+scrollFrame.getNumItems = function()
+	return #threadListItems
+end
+scrollFrame.onScroll = function(self)
+	self.scrollBar:Hide()
+end
+scrollFrame.updateButton = function(button, index)
+	local object = threadListItems[index]
 	
-	local offset = self:GetOffset()
+	button:SetEnabled(not object.separator)
+	button.text:SetPoint("RIGHT", -2, 0)
 	
-	for line = 1, #self.buttons do
-		local button = self.buttons[line]
-		local lineplusoffset = line + offset
-		local object = threadListItems[lineplusoffset]
-		if object then
-			if object.separator then
-				button:SetHeader()
-				button.text:SetText(nil)
-				button.close:Hide()
-				button.icon:Hide()
-				button.flash:Stop()
-				setButtonStatus(button, false)
-				separator:SetAllPoints(button)
-				separator:Show()
-			else
-				button:ResetHeight()
-			end
-			button:SetEnabled(not object.separator)
-			button.text:SetPoint("RIGHT", -2, 0)
-			
-			if not object.separator then
-				local thread = PM:GetThread(object.target, object.type)
-				
-				local selectedThread = PM:GetSelectedThread()
-				if selectedThread and thread == selectedThread then
-					button:LockHighlight()
-					button.selected = true
-				else
-					button:UnlockHighlight()
-					button.selected = nil
-				end
-				
-				if PM:IsThreadActive(object.target, object.type) then
-					if (thread.unread and thread ~= selectedThread) and not (button:IsMouseOver() or button.close:IsMouseOver()) then
-						if not button.flash:IsPlaying() then
-							button.flash:Play()
-						end
-					elseif button.flash:IsPlaying() then
-						button.flash:Stop()
-					end
-				else
-					button.close:Hide()
-				end
-				
-				if object.type == "WHISPER" then
-					local name = Ambiguate(object.target, "none")
-					local isFriend, connected, status = PM:GetFriendInfo(name)
-					button.text:SetText(name)
-					button.icon:Hide()
-					setButtonStatus(button, isFriend, connected, status == CHAT_FLAG_AFK, status == CHAT_FLAG_DND)
-				end
-				
-				if object.type == "BN_WHISPER" then
-					local presenceID = object.target and BNet_GetPresenceID(object.target)
-					if presenceID then
-						local presenceID, presenceName, battleTag, isBattleTagPresence, _, _, client, isOnline, _, isAFK, isDND = BNGetFriendInfoByID(presenceID)
-						button.text:SetText(object.target or UNKNOWN)
-						button.icon:Show()
-						button.icon:SetTexture(BNet_GetClientTexture(client))
-						button.text:SetPoint("RIGHT", button.icon, "LEFT", -2, 0)
-						setButtonStatus(button, true, isOnline, isAFK, isDND)
-					else
-						button.text:SetText(UNKNOWN)
-						setButtonStatus(button, false)
-					end
-				end
-				
-				-- button.active = true
-				button.target = object.target
-				button.type = object.type
-				if button:IsMouseOver() then
-					if PM:IsThreadActive(object.target, object.type) then
-						button.icon:Hide()
-						button.text:SetPoint("RIGHT", button.icon, "LEFT", -2, 0)
-					end
-				end
-			end
-		end
-		button:SetShown(object ~= nil)
+	if object.separator then
+		button:SetHeader()
+		button.text:SetText(nil)
+		button.close:Hide()
+		button.icon:Hide()
+		button.flash:Stop()
+		setButtonStatus(button, false)
+		separator:SetAllPoints(button)
+		return
 	end
 	
-	HybridScrollFrame_Update(self, (#threadListItems - 1) * self.buttonHeight + self.headerHeight, #self.buttons * self.buttonHeight)
+	button:ResetHeight()
 	
-	self.scrollBar:Hide()
+	local thread = PM:GetThread(object.target, object.type)
+	
+	local selectedThread = PM:GetSelectedThread()
+	if selectedThread and thread == selectedThread then
+		button:LockHighlight()
+		button.selected = true
+	else
+		button:UnlockHighlight()
+		button.selected = nil
+	end
+	
+	if PM:IsThreadActive(object.target, object.type) then
+		if (thread.unread and thread ~= selectedThread) and not (button:IsMouseOver() or button.close:IsMouseOver()) then
+			if not button.flash:IsPlaying() then
+				button.flash:Play()
+			end
+		elseif button.flash:IsPlaying() then
+			button.flash:Stop()
+		end
+	else
+		button.close:Hide()
+	end
+	
+	if object.type == "WHISPER" then
+		local name = Ambiguate(object.target, "none")
+		local isFriend, connected, status = PM:GetFriendInfo(name)
+		button.text:SetText(name)
+		button.icon:Hide()
+		setButtonStatus(button, isFriend, connected, status == CHAT_FLAG_AFK, status == CHAT_FLAG_DND)
+	end
+	
+	if object.type == "BN_WHISPER" then
+		local presenceID = object.target and BNet_GetPresenceID(object.target)
+		if presenceID then
+			local presenceID, presenceName, battleTag, isBattleTagPresence, _, _, client, isOnline, _, isAFK, isDND = BNGetFriendInfoByID(presenceID)
+			button.text:SetText(object.target or UNKNOWN)
+			button.icon:Show()
+			button.icon:SetTexture(BNet_GetClientTexture(client))
+			button.text:SetPoint("RIGHT", button.icon, "LEFT", -2, 0)
+			setButtonStatus(button, true, isOnline, isAFK, isDND)
+		else
+			button.text:SetText(UNKNOWN)
+			setButtonStatus(button, false)
+		end
+	end
+	
+	button.target = object.target
+	button.type = object.type
+	if button:IsMouseOver() then
+		if PM:IsThreadActive(object.target, object.type) then
+			button.icon:Hide()
+			button.text:SetPoint("RIGHT", button.icon, "LEFT", -2, 0)
+		end
+	end
 end
 scrollFrame.createButton = function(parent)
 	local button = CreateFrame("Button", nil, parent)
@@ -534,6 +523,23 @@ menuButton.menu.initialize = function(self, level)
 			self:AddButton(info, level)
 		end
 		
+		local target = thread.target
+		if thread.type == "BN_WHISPER" then
+			local _, _, _, _, toonName, _, client = BNGetFriendInfoByID(thread.target)
+			if client == BNET_CLIENT_WOW then
+				target = toonName
+			end
+		end
+		local info = UIDropDownMenu_CreateInfo()
+		info.text = TARGET
+		info.attributes = {
+			["type"] = "macro",
+			["macrotext"] = "/targetexact "..Ambiguate(target, "none"),
+		}
+		info.disabled = InCombatLockdown()
+		info.notCheckable = true
+		self:AddButton(info, level)
+		
 		local info = UIDropDownMenu_CreateInfo()
 		info.text = "View archive"
 		info.func = openArchive
@@ -571,6 +577,88 @@ menuButton.menu.initialize = function(self, level)
 end
 
 
+local MAX_MESSAGE_LENGTH = 255
+
+local function zero(text)
+	return text:gsub(".", 0)
+end
+
+-- super delicate message splitting logic
+local function splitMessage(message2)
+	local message = message2
+	
+	local nextStart = 1
+	
+	repeat
+		local linkStart, linkEnd, pipes = string.find(message, "(|+)cff......|H", nextStart)
+		
+		-- if the number of pipes is odd, then the last one is not escaped
+		if linkStart and (#pipes % 2 == 1) then
+			-- valid start of link found at message[linkStart]
+			-- search from this position onwards to find the pieces to complete the link
+			local nextSearchPos = linkStart
+			local found
+			while true do
+				local s, e, pipes = string.find(message, "(|+)h", nextSearchPos)
+				if not s then
+					-- no more link pieces (valid or no) were found, break
+					nextStart = linkEnd + 1
+					break
+				end
+				if (#pipes % 2 == 1) then
+					if found then
+						-- final link piece found, link is complete
+						message = message:sub(1, nextStart - 1)..message:sub(nextStart, linkStart + #pipes - 2):gsub("%S+", zero):gsub("%S ", "1 "):gsub("%S$", "1")..string.rep("0", e + 2 - linkStart + #pipes - 1).."1"..message:sub(e + 2 + 1)
+						nextStart = e + 2 + 1
+						break
+					end
+					-- next valid link piece found, search from this position onwards to find the last one
+					found = true
+				end
+				nextSearchPos = e
+			end
+		elseif linkEnd then
+			message = message:sub(1, nextStart - 1)..message:sub(nextStart, linkStart - 1):gsub("%S+", zero):gsub("%S ", "1 "):gsub("%S$", "1")..message:sub(linkStart, linkEnd):gsub("%S+", zero):gsub("%S ", "1 ")..message:sub(linkEnd + 1)
+			nextStart = linkEnd + 1
+		end
+	until not linkStart
+	
+	message = message:sub(1, nextStart - 1)..message:sub(nextStart):gsub("%S+", zero):gsub("%S ", "1 "):gsub("%S$", "1")
+	
+	local messagePieces = {}
+	
+	local lastStart = 1
+	local lastStop = 0
+	local nextStart = 0
+	
+	repeat
+		local wordEnd = string.find(message, "1", nextStart)
+		if wordEnd - lastStart + 1 > MAX_MESSAGE_LENGTH then
+			-- including this word will make the string too long, print piece up until previous word, and start a new piece starting from this word
+			tinsert(messagePieces, string.sub(message2, lastStart, lastStop))
+			lastStart = message:find("0*1", lastStop + 1)
+			-- lastStop = wordEnd
+		else
+			-- including this word still puts us under the limit, proceed and check if next word fits
+			-- lastStop = wordEnd
+		end
+		lastStop = wordEnd
+		nextStart = message:find("0*1", wordEnd + 1)
+		-- this piece is too long too fit in one message
+	until not nextStart
+	-- until #message - lastStop < MAX_MESSAGE_LENGTH
+	
+	-- the remaining text fits into one message
+	-- so send the previous piece..
+	tinsert(messagePieces, string.sub(message2, lastStart, lastStop))
+	-- ..and the remainder
+	if nextStart then
+		tinsert(messagePieces, message2:sub(nextStart))
+	end
+	
+	return messagePieces
+end
+
 local editbox = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
 PM.editbox = editbox
 editbox:SetHeight(20)
@@ -578,7 +666,6 @@ editbox:SetPoint("LEFT", insetLeft, "RIGHT", 9, 0)
 editbox:SetPoint("BOTTOMRIGHT", -6, 5)
 editbox:SetFontObject("ChatFontSmall")
 editbox:SetAutoFocus(false)
-editbox:SetMaxLetters(255)
 editbox:SetScript("OnEnterPressed", function(self)
 	local type = self:GetAttribute("chatType")
 	local text = self:GetText()
@@ -588,13 +675,25 @@ editbox:SetScript("OnEnterPressed", function(self)
 		if type == "WHISPER" then
 			local target = self:GetAttribute("tellTarget")
 			ChatEdit_SetLastToldTarget(target, type)
-			SendChatMessage(text, type, editbox.languageID, target)
+			if #text > MAX_MESSAGE_LENGTH then
+				for i, message in ipairs(splitMessage(text)) do
+					SendChatMessage(message, type, editbox.languageID, target)
+				end
+			else
+				SendChatMessage(text, type, editbox.languageID, target)
+			end
 		elseif type == "BN_WHISPER" then
 			local target = self:GetAttribute("tellTarget")
 			local presenceID = BNet_GetPresenceID(target)
 			if presenceID then
 				ChatEdit_SetLastToldTarget(target, type)
-				BNSendWhisper(presenceID, text)
+				if #text > MAX_MESSAGE_LENGTH then
+					for i, message in ipairs(splitMessage(text)) do
+						BNSendWhisper(presenceID, message)
+					end
+				else
+					BNSendWhisper(presenceID, text)
+				end
 			else
 				local info = ChatTypeInfo["SYSTEM"]
 				self.chatFrame:AddMessage(format(BN_UNABLE_TO_RESOLVE_NAME, target), info.r, info.g, info.b)
@@ -643,7 +742,7 @@ editbox:SetScript("OnTextChanged", function(self, isUserInput)
 end)
 editbox:SetScript("OnUpdate", function(self)
 	if self.setText then
-		self:SetText("")
+		self:SetText(PM:GetSelectedThread().editboxText or "")
 		self.setText = nil
 	end
 end)
@@ -857,9 +956,10 @@ local function printMessage(thread, messageIndex, addToTop)
 	if message2 and (nextTime.yday ~= time.yday or nextTime.year ~= time.year) then
 		if addToTop then
 			message1, message2 = message2, message1
+			time, nextTime = nextTime, time
 		end
-		local time = date("*t", message1.timestamp)
-		local nextTime = message2 and date("*t", message2.timestamp)
+		-- local time = date("*t", message1.timestamp)
+		-- local nextTime = message2 and date("*t", message2.timestamp)
 		local t1 = date("%B %d", message1.timestamp)
 		if (currentTime.yday == time.yday and currentTime.year == time.year) then
 			t1 = HONOR_TODAY

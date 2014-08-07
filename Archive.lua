@@ -15,6 +15,16 @@ local inset = CreateFrame("Frame", nil, frame, "InsetFrameTemplate")
 inset:SetPoint("TOPLEFT", PANEL_INSET_LEFT_OFFSET, PANEL_INSET_ATTIC_OFFSET)
 inset:SetPoint("BOTTOMRIGHT", PANEL_INSET_RIGHT_OFFSET, PANEL_INSET_BOTTOM_OFFSET + 2)
 
+local function sortThreads(a, b)
+	if a.type ~= b.type then
+		return a.type < b.type
+	else
+		return a.target < b.target
+	end
+end
+
+local sortedThreads = {}
+
 local function onClick(self, target, chatType)
 	PM:SelectArchive(target, chatType)
 end
@@ -24,16 +34,21 @@ menu:SetWidth(140)
 menu:SetPoint("TOPLEFT", 0, -29)
 menu:JustifyText("LEFT")
 menu.initialize = function(self)
+	wipe(sortedThreads)
 	for i, thread in ipairs(PM.db.threads) do
 		if #thread.messages > 0 then
-			local info = UIDropDownMenu_CreateInfo()
-			info.text = Ambiguate(thread.target or UNKNOWN, "none")
-			info.func = onClick
-			info.arg1 = thread.target
-			info.arg2 = thread.type
-			info.checked = (selectedLog == thread.target)
-			self:AddButton(info)
+			tinsert(sortedThreads, thread)
 		end
+	end
+	sort(sortedThreads, sortThreads)
+	for i, thread in ipairs(sortedThreads) do
+		local info = UIDropDownMenu_CreateInfo()
+		info.text = Ambiguate(thread.target or UNKNOWN, "none")
+		info.func = onClick
+		info.arg1 = thread.target
+		info.arg2 = thread.type
+		info.checked = (selectedLog == thread.target)
+		self:AddButton(info)
 	end
 end
 
@@ -121,7 +136,7 @@ local function printLog()
 			
 			local nextMessage = thread.messages[i + 1]
 			local nextTime = nextMessage and date("*t", nextMessage.timestamp)
-			if nextMessage and (nextTime.yday ~= time.yday or nextTime.year ~= time.year) then
+			if nextMessage and nextMessage.messageType and (nextTime.yday ~= time.yday or nextTime.year ~= time.year) then
 				text = text..format("\n- %s\n\n- %s", date("%B %d", message.timestamp), date("%B %d", nextMessage.timestamp))
 			end
 		end
