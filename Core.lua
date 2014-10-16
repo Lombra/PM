@@ -137,8 +137,9 @@ function PM:OnInitialize()
 	self:RegisterEvent("PLAYER_LOGOUT")
 	self:RegisterEvent("UPDATE_CHAT_COLOR")
 	self:RegisterEvent("FRIENDLIST_UPDATE")
-	self:RegisterEvent("BN_FRIEND_INFO_CHANGED")
 	self:RegisterEvent("BN_FRIEND_LIST_SIZE_CHANGED")
+	self:RegisterEvent("PLAYER_FLAGS_CHANGED")
+	self:RegisterEvent("BN_FRIEND_INFO_CHANGED")
 	self:RegisterEvent("BN_CONNECTED")
 	-- self:RegisterEvent("BN_DISCONNECTED")
 	-- self:RegisterEvent("BN_SELF_ONLINE")
@@ -191,6 +192,13 @@ end
 
 function PM:BN_FRIEND_LIST_SIZE_CHANGED()
 	self:UpdatePresences()
+end
+
+function PM:PLAYER_FLAGS_CHANGED(unit)
+	if self:GetSelectedThread() and (self:GetFullCharacterName(UnitName(unit)) == self:GetSelectedThread().target) then
+		self:UpdateInfo()
+	end
+	-- self:UpdateThreads()
 end
 
 function PM:BN_FRIEND_INFO_CHANGED(index)
@@ -389,6 +397,7 @@ function PM:CloseThread(target, chatType)
 					local message = thread.messages[i]
 					if not message.active then break end
 					message.active = nil
+					message.unread = nil
 				end
 			end
 			self:UpdateThreads()
@@ -402,8 +411,11 @@ function PM:GetSelectedThread()
 end
 
 function PM:GetBattleTag(presenceName)
-	local presenceID, presenceName, battleTag = BNGetFriendInfoByID(BNet_GetPresenceID(presenceName))
-	return battleTag
+	local presenceID = GetAutoCompletePresenceID(presenceName)
+	if presenceID then
+		local presenceID, presenceName, battleTag = BNGetFriendInfoByID(presenceID)
+		return battleTag
+	end
 end
 
 function PM:GetFullCharacterName(name)
@@ -411,4 +423,17 @@ function PM:GetFullCharacterName(name)
 		name = name.."-"..gsub(GetRealmName(), " ", "")
 	end
 	return name
+end
+
+local MONTHS = {CalendarGetMonthNames()}
+
+function PM:GetDateStamp(timestamp)
+	local text
+	local currentTime = date("*t", time())
+	if (currentTime.yday == timestamp.yday and currentTime.year == timestamp.year) then
+		text = HONOR_TODAY
+	else
+		text = MONTHS[timestamp.month].." "..timestamp.day
+	end
+	return "- "..text
 end

@@ -311,6 +311,7 @@ frame:AddSubCategory("Formatting", true):CreateOptions({
 	{
 		type = "CheckButton",
 		text = "Use class colors",
+		tooltip = "Color incoming messages' sender by their class.",
 		key = "classColors",
 		func = function(self, value) PM:RefreshThread(PM:GetSelectedThread()) end,
 	},

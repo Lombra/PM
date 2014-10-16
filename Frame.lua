@@ -174,6 +174,11 @@ scrollFrame.getNumItems = function()
 end
 scrollFrame.onScroll = function(self)
 	self.scrollBar:Hide()
+	if not self.separatorShown then
+		separator:Hide()
+	end
+	scrollFrame.separatorShown = nil
+	scrollDown.texture:SetDesaturated(self.range <= 0)
 end
 scrollFrame.updateButton = function(button, index)
 	local object = threadListItems[index]
@@ -189,6 +194,8 @@ scrollFrame.updateButton = function(button, index)
 		button.flash:Stop()
 		setButtonStatus(button, false)
 		separator:SetAllPoints(button)
+		separator:Show()
+		scrollFrame.separatorShown = true
 		return
 	end
 	
@@ -226,7 +233,7 @@ scrollFrame.updateButton = function(button, index)
 	end
 	
 	if object.type == "BN_WHISPER" then
-		local presenceID = object.target and BNet_GetPresenceID(object.target)
+		local presenceID = object.target and GetAutoCompletePresenceID(object.target)
 		if presenceID then
 			local presenceID, presenceName, battleTag, isBattleTagPresence, _, _, client, isOnline, _, isAFK, isDND = BNGetFriendInfoByID(presenceID)
 			button.text:SetText(object.target or UNKNOWN)
@@ -242,7 +249,7 @@ scrollFrame.updateButton = function(button, index)
 	
 	button.target = object.target
 	button.type = object.type
-	if button:IsMouseOver() then
+	if GetMouseFocus() == button then
 		if PM:IsThreadActive(object.target, object.type) then
 			button.icon:Hide()
 			button.text:SetPoint("RIGHT", button.icon, "LEFT", -2, 0)
@@ -445,8 +452,6 @@ end)
 
 menuButton.menu = PM:CreateDropdown("Menu")
 menuButton.menu.relativeTo = menuButton
-menuButton.menu.xOffset = 0
-menuButton.menu.yOffset = 0
 menuButton.menu.initialize = function(self, level)
 	if level == 1 then
 		local thread = UIDROPDOWNMENU_MENU_VALUE
@@ -525,7 +530,7 @@ menuButton.menu.initialize = function(self, level)
 		
 		local target = thread.target
 		if thread.type == "BN_WHISPER" then
-			local _, _, _, _, toonName, _, client = BNGetFriendInfoByID(thread.target)
+			local _, _, _, _, toonName, _, client = BNGetFriendInfoByID(thread.targetID)
 			if client == BNET_CLIENT_WOW then
 				target = toonName
 			end
@@ -584,13 +589,13 @@ local function zero(text)
 end
 
 -- super delicate message splitting logic
-local function splitMessage(message2)
-	local message = message2
+local function splitMessage(message)
+	local maskedMessage = message
 	
 	local nextStart = 1
 	
 	repeat
-		local linkStart, linkEnd, pipes = string.find(message, "(|+)cff......|H", nextStart)
+		local linkStart, linkEnd, pipes = string.find(maskedMessage, "(|+)cff......|H", nextStart)
 		
 		-- if the number of pipes is odd, then the last one is not escaped
 		if linkStart and (#pipes % 2 == 1) then
@@ -599,7 +604,7 @@ local function splitMessage(message2)
 			local nextSearchPos = linkStart
 			local found
 			while true do
-				local s, e, pipes = string.find(message, "(|+)h", nextSearchPos)
+				local s, e, pipes = string.find(maskedMessage, "(|+)h", nextSearchPos)
 				if not s then
 					-- no more link pieces (valid or no) were found, break
 					nextStart = linkEnd + 1
@@ -608,7 +613,7 @@ local function splitMessage(message2)
 				if (#pipes % 2 == 1) then
 					if found then
 						-- final link piece found, link is complete
-						message = message:sub(1, nextStart - 1)..message:sub(nextStart, linkStart + #pipes - 2):gsub("%S+", zero):gsub("%S ", "1 "):gsub("%S$", "1")..string.rep("0", e + 2 - linkStart + #pipes - 1).."1"..message:sub(e + 2 + 1)
+						maskedMessage = maskedMessage:sub(1, nextStart - 1)..maskedMessage:sub(nextStart, linkStart + #pipes - 2):gsub("%S+", zero):gsub("%S ", "1 "):gsub("%S$", "1")..string.rep("0", e + 2 - linkStart + #pipes - 1).."1"..maskedMessage:sub(e + 2 + 1)
 						nextStart = e + 2 + 1
 						break
 					end
@@ -618,12 +623,12 @@ local function splitMessage(message2)
 				nextSearchPos = e
 			end
 		elseif linkEnd then
-			message = message:sub(1, nextStart - 1)..message:sub(nextStart, linkStart - 1):gsub("%S+", zero):gsub("%S ", "1 "):gsub("%S$", "1")..message:sub(linkStart, linkEnd):gsub("%S+", zero):gsub("%S ", "1 ")..message:sub(linkEnd + 1)
+			maskedMessage = maskedMessage:sub(1, nextStart - 1)..maskedMessage:sub(nextStart, linkStart - 1):gsub("%S+", zero):gsub("%S ", "1 "):gsub("%S$", "1")..maskedMessage:sub(linkStart, linkEnd):gsub("%S+", zero):gsub("%S ", "1 ")..maskedMessage:sub(linkEnd + 1)
 			nextStart = linkEnd + 1
 		end
 	until not linkStart
 	
-	message = message:sub(1, nextStart - 1)..message:sub(nextStart):gsub("%S+", zero):gsub("%S ", "1 "):gsub("%S$", "1")
+	maskedMessage = maskedMessage:sub(1, nextStart - 1)..maskedMessage:sub(nextStart):gsub("%S+", zero):gsub("%S ", "1 "):gsub("%S$", "1")
 	
 	local messagePieces = {}
 	
@@ -632,28 +637,22 @@ local function splitMessage(message2)
 	local nextStart = 0
 	
 	repeat
-		local wordEnd = string.find(message, "1", nextStart)
+		local wordEnd = string.find(maskedMessage, "1", nextStart)
 		if wordEnd - lastStart + 1 > MAX_MESSAGE_LENGTH then
 			-- including this word will make the string too long, print piece up until previous word, and start a new piece starting from this word
-			tinsert(messagePieces, string.sub(message2, lastStart, lastStop))
-			lastStart = message:find("0*1", lastStop + 1)
-			-- lastStop = wordEnd
-		else
-			-- including this word still puts us under the limit, proceed and check if next word fits
-			-- lastStop = wordEnd
+			tinsert(messagePieces, string.sub(message, lastStart, lastStop))
+			lastStart = maskedMessage:find("0*1", lastStop + 1)
 		end
 		lastStop = wordEnd
-		nextStart = message:find("0*1", wordEnd + 1)
-		-- this piece is too long too fit in one message
+		nextStart = maskedMessage:find("0*1", wordEnd + 1)
 	until not nextStart
-	-- until #message - lastStop < MAX_MESSAGE_LENGTH
 	
 	-- the remaining text fits into one message
 	-- so send the previous piece..
-	tinsert(messagePieces, string.sub(message2, lastStart, lastStop))
+	tinsert(messagePieces, string.sub(message, lastStart, lastStop))
 	-- ..and the remainder
 	if nextStart then
-		tinsert(messagePieces, message2:sub(nextStart))
+		tinsert(messagePieces, message:sub(nextStart))
 	end
 	
 	return messagePieces
@@ -677,10 +676,10 @@ editbox:SetScript("OnEnterPressed", function(self)
 			ChatEdit_SetLastToldTarget(target, type)
 			if #text > MAX_MESSAGE_LENGTH then
 				for i, message in ipairs(splitMessage(text)) do
-					SendChatMessage(message, type, editbox.languageID, target)
+					SendChatMessage(message, type, self.languageID, target)
 				end
 			else
-				SendChatMessage(text, type, editbox.languageID, target)
+				SendChatMessage(text, type, self.languageID, target)
 			end
 		elseif type == "BN_WHISPER" then
 			local target = self:GetAttribute("tellTarget")
@@ -703,7 +702,7 @@ editbox:SetScript("OnEnterPressed", function(self)
 			-- BNSendConversationMessage(target, text);
 		end
 		if addHistory then
-			editbox:AddHistoryLine(text)
+			self:AddHistoryLine(text)
 		end
 	end
 	self:SetText("")
@@ -946,31 +945,20 @@ end
 local function printMessage(thread, messageIndex, addToTop)
 	local message1 = thread.messages[messageIndex]
 	local message2 = thread.messages[messageIndex + 1]
-	-- printing at top needs to be done in reverse order
 	if not addToTop then
 		PM:PrintMessage(thread, message1, addToTop)
 	end
-	local currentTime = date("*t", time())
-	local time = date("*t", message1.timestamp)
-	local nextTime = message2 and date("*t", message2.timestamp)
-	if message2 and (nextTime.yday ~= time.yday or nextTime.year ~= time.year) then
+	local time1 = date("*t", message1.timestamp)
+	local time2 = message2 and date("*t", message2.timestamp)
+	if message2 and (time2.yday ~= time1.yday or time2.year ~= time1.year) then
 		if addToTop then
+			-- printing at top needs to be done in reverse order
 			message1, message2 = message2, message1
-			time, nextTime = nextTime, time
+			time1, time2 = time2, time1
 		end
-		-- local time = date("*t", message1.timestamp)
-		-- local nextTime = message2 and date("*t", message2.timestamp)
-		local t1 = date("%B %d", message1.timestamp)
-		if (currentTime.yday == time.yday and currentTime.year == time.year) then
-			t1 = HONOR_TODAY
-		end
-		local t2 = date("%B %d", message2.timestamp)
-		if (currentTime.yday == nextTime.yday and currentTime.year == nextTime.year) then
-			t2 = HONOR_TODAY
-		end
-		chatLog:AddMessage("- "..t1, 0.8, 0.8, 0.8, nil, addToTop)
+		chatLog:AddMessage(PM:GetDateStamp(time1), 0.8, 0.8, 0.8, nil, addToTop)
 		chatLog:AddMessage(" ", 1, 1, 1, nil, addToTop)
-		chatLog:AddMessage("- "..t2, 0.8, 0.8, 0.8, nil, addToTop)
+		chatLog:AddMessage(PM:GetDateStamp(time2), 0.8, 0.8, 0.8, nil, addToTop)
 	elseif not message1.active and (not message2 or message2.active) then
 		chatLog:AddMessage(" ", 1, 1, 1, nil, addToTop)
 	end
@@ -1041,8 +1029,10 @@ end
 
 local darken = 0.2
 
+local lastMessageType
+
 function PM:PrintMessage(thread, message, addToTop)
-	local messageType, message, timestamp, isActive = message.messageType, message.text, message.timestamp, message.active
+	local messageType, messageText, timestamp, isActive, isUnread = message.messageType, message.text, message.timestamp, message.active, message.unread
 	local chatType = thread.type
 	local color = self.db.useDefaultColor[chatType] and ChatTypeInfo[chatType] or self.db.color[chatType]
 	local r, g, b = color.r, color.g, color.b
@@ -1053,6 +1043,7 @@ function PM:PrintMessage(thread, message, addToTop)
 		end
 	end
 	if messageType then
+		-- if messageType ~= lastMessageType then
 			local sender
 			if messageType == "out" then
 				sender = "You"
@@ -1071,13 +1062,24 @@ function PM:PrintMessage(thread, message, addToTop)
 				end
 				sender = "|cff56a3ff"..sender.."|r"
 			end
-			message = "|cffffffff"..sender.."|r: "..message
+			messageText = "|cffffffff"..sender.."|r: "..messageText
+		-- end
 	else
 		local color = ChatTypeInfo["SYSTEM"]
 		r, g, b = color.r, color.g, color.b
-		message = format(message, Ambiguate(thread.target, "none"))
+		messageText = format(messageText, Ambiguate(thread.target, "none"))
 	end
-	chatLog:AddMessage((self.db.timestamps and format("|cffd0d0d0%s|r", date(self.db.timestampFormat, timestamp)) or "")..message, r, g, b, isActive and GetChatTypeIndex(chatType), addToTop, accessID, extraData)
+	if self.db.timestamps then
+		if isUnread and thread.unread then
+			messageText = format("|cffff8040%s|r", date(self.db.timestampFormat, timestamp))..messageText
+			-- messageText = format("|cffff6000%s|r", date(self.db.timestampFormat, timestamp))..messageText
+		else
+			messageText = format("|cffd0d0d0%s|r", date(self.db.timestampFormat, timestamp))..messageText
+		end
+	end
+	message.unread = nil
+	-- lastMessageType = messageType
+	chatLog:AddMessage(messageText, r, g, b, isActive and GetChatTypeIndex(chatType), addToTop, accessID, extraData)
 	if not addToTop and not chatLog:AtBottom() and not scrollToBottom.flash:IsPlaying() then
 		scrollToBottom.flash:Play()
 	end
@@ -1091,52 +1093,55 @@ function PM:UpdateInfo()
 		if not selectedThread.target then
 			name = UNKNOWN
 		else
-		local presenceID = BNet_GetPresenceID(selectedThread.target)
-		if not selectedThread.targetID then
-			selectedThread.targetID = presenceID
-		end
-		local _, presenceName, _, _, toonName, toonID, client, isOnline, lastOnline, isAFK, isDND = BNGetFriendInfoByID(presenceID)
-		local _, toonName, _, realmName, _, faction, race, class, _, zoneName, level, gameText = BNGetToonInfo(toonID or presenceID)
-		infoPanel.icon:SetTexCoord(0, 1, 0, 1)
-		name = presenceName or UNKNOWN
-		if isAFK then
-			name = name.." (AFK)"
-		elseif isDND then
-			name = name.." (DND)"
-		elseif not isOnline then
-			name = name.." (Offline)"
-		end
-		if toonName then
-			info = toonName or ""
-			if client == BNET_CLIENT_WOW then
-				if zoneName and zoneName ~= "" then
-					info = info.." - "..zoneName
-				end
-			else
-				info = info.." - "..gameText
+			local presenceID = BNet_GetPresenceID(selectedThread.target)
+			if not selectedThread.targetID then
+				selectedThread.targetID = presenceID
 			end
-		end
-		texture = BNet_GetClientTexture(client)
+			local _, presenceName, _, _, toonName, toonID, client, isOnline, lastOnline, isAFK, isDND = BNGetFriendInfoByID(presenceID)
+			local _, toonName, _, realmName, _, faction, race, class, _, zoneName, level, gameText = BNGetToonInfo(toonID or presenceID)
+			infoPanel.icon:SetTexCoord(0, 1, 0, 1)
+			name = presenceName or UNKNOWN
+			if isAFK then
+				name = name.." |cffff8000"..CHAT_FLAG_AFK
+			elseif isDND then
+				name = name.." |cffff0000"..CHAT_FLAG_DND
+			elseif not isOnline then
+				name = name.." |cff808080("..FRIENDS_LIST_OFFLINE..")"
+			end
+			if toonName then
+				info = toonName or ""
+				if client == BNET_CLIENT_WOW then
+					if zoneName and zoneName ~= "" then
+						info = info.." - "..zoneName
+					end
+				else
+					info = info.." - "..gameText
+				end
+			end
+			texture = BNet_GetClientTexture(client)
 		end
 	else
 		-- try various means of getting information about the target
-		local name = Ambiguate(selectedThread.target, "none")
-		-- Unit* API, in case they're in the group
-		local level = UnitLevel(name)
-		if level > 0 then
-			info = format("Level %d %s", level, UnitClass(name))
-			UnitIsConnected(name)
-			UnitIsAFK(name)
-			UnitIsDND(name)
-		end
+		local target = Ambiguate(selectedThread.target, "none")
+		name = target
 		-- friend list
-		local isFriend, connected, status, level, class, area = self:GetFriendInfo(name)
+		local isFriend, connected, status, level, class, area = self:GetFriendInfo(target)
 		if isFriend and connected and level and level > 0 then
 			info = format("Level %d %s - %s", level, class, area)
-			-- if englishClass then
-				infoPanel.icon:SetTexCoord(unpack(CLASS_ICON_TCOORDS[reverseclassnames[class]]))
-				texture = [[Interface\Glues\CharacterCreate\UI-CharacterCreate-Classes]]
-			-- end
+			infoPanel.icon:SetTexCoord(unpack(CLASS_ICON_TCOORDS[reverseclassnames[class]]))
+			texture = [[Interface\Glues\CharacterCreate\UI-CharacterCreate-Classes]]
+		end
+		-- Unit* API, in case they're in the group
+		local level = UnitLevel(target)
+		if level > 0 then
+			info = format("Level %d %s", level, UnitClass(target))
+			if UnitIsAFK(target) then
+				name = name.." |cffff8000"..CHAT_FLAG_AFK
+			elseif UnitIsDND(target) then
+				name = name.." |cffff0000"..CHAT_FLAG_DND
+			elseif not UnitIsConnected(target) then
+				name = name.." |cff808080("..FRIENDS_LIST_OFFLINE..")"
+			end
 		end
 		-- or GUID from chat event
 		if not info and selectedThread.targetID then

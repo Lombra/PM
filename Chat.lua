@@ -134,13 +134,15 @@ function PM:HandleChatEvent(event, ...)
 	if chatType == "BN_WHISPER" then
 		thread.targetID = presenceID
 	end
+	local shouldSuppress = self:ShouldSuppress()
 	local messageType = chatEvents[event]
 	if messageType == "in" and not (PMFrame:IsShown() and thread == self:GetSelectedThread()) then
+		-- incoming message whose thread is not currently shown, flag thread as unread
 		thread.unread = true
 		self:UpdateThreadList()
 	end
 	self:SaveMessage(sender, chatType, messageType, message)
-	if self:ShouldSuppress() then
+	if shouldSuppress then
 		return
 	end
 	-- if the target of the currently selected thread is not the sender of this PM, then select their thread
@@ -232,8 +234,20 @@ function PM:SaveMessage(target, chatType, messageType, messageText)
 		active = true,
 		unread = true,
 	}
+	if (PMFrame:IsShown() or not self:ShouldSuppress()) and (self:GetSelectedThread() == thread or not self.editbox:HasFocus()) then
+		message.unread = nil
+	end
 	tinsert(thread.messages, message)
 	if thread == self:GetSelectedThread() then
+		local message2 = thread.messages[#thread.messages - 1]
+		local currentTime = date("*t", message.timestamp)
+		local time2 = message2 and date("*t", message2.timestamp)
+		if message2 and (time2.yday ~= currentTime.yday or time2.year ~= currentTime.year) then
+			self.chatLog:AddMessage(self:GetDateStamp(time2), 0.8, 0.8, 0.8)
+			self.chatLog:AddMessage(" ")
+			self.chatLog:AddMessage(self:GetDateStamp(currentTime), 0.8, 0.8, 0.8)
+		end
+		
 		self:PrintMessage(thread, message)
 	end
 end
