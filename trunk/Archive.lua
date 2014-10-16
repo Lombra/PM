@@ -137,11 +137,12 @@ local function printLog()
 			local nextMessage = thread.messages[i + 1]
 			local nextTime = nextMessage and date("*t", nextMessage.timestamp)
 			if nextMessage and nextMessage.messageType and (nextTime.yday ~= time.yday or nextTime.year ~= time.year) then
-				text = text..format("\n- %s\n\n- %s", date("%B %d", message.timestamp), date("%B %d", nextMessage.timestamp))
+				text = text..format("\n|cffdddddd%s\n\n%s|r", PM:GetDateStamp(time), PM:GetDateStamp(nextTime))
 			end
 		end
 	end
-	text = text..format("\n- %s", date("%B %d", thread.messages[#thread.messages].timestamp))
+	local t = date("*t", thread.messages[#thread.messages].timestamp)
+	text = text..format("\n|cffdddddd%s|r", PM:GetDateStamp(t))
 	archiveLog:SetText(strsub(text, 2))
 end
 
@@ -243,14 +244,12 @@ local purgeButton = PM:CreateButton(frame)
 purgeButton:SetWidth(80)
 purgeButton:SetPoint("LEFT", menu, "RIGHT", -4, 2)
 purgeButton:SetText("Purge")
-purgeButton.rightArrow:Show()
+purgeButton.arrow:Show()
 purgeButton:SetScript("OnClick", function(self)
 	self.menu:Toggle()
 end)
 
 purgeButton.menu = PM:CreateDropdown("Menu")
-purgeButton.menu.xOffset = 0
-purgeButton.menu.yOffset = 0
 purgeButton.menu.relativeTo = purgeButton
 purgeButton.menu.initialize = function(self)
 	for index = 1, #purgeOptions do
