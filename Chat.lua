@@ -6,14 +6,18 @@ hooksecurefunc("ChatEdit_SetLastTellTarget", function(target, chatType)
 	if chatType == "BN_WHISPER" then
 		target = PM:GetBattleTag(target)
 	end
-	PM.db.lastTell, PM.db.lastTellType = target, chatType
+	if target then
+		PM.db.lastTell, PM.db.lastTellType = target, chatType
+	end
 end)
 
 hooksecurefunc("ChatEdit_SetLastToldTarget", function(target, chatType)
 	if chatType == "BN_WHISPER" then
 		target = PM:GetBattleTag(target)
 	end
-	PM.db.lastTold, PM.db.lastToldType = target, chatType
+	if target then
+		PM.db.lastTold, PM.db.lastToldType = target, chatType
+	end
 end)
 
 
@@ -120,12 +124,13 @@ function PM:HandleChatEvent(event, ...)
 	if filter then
 		return
 	end
+	local isGM = (flags == "GM")
 	local chatType = Chat_GetChatCategory(event:sub(10))
-	if chatType == "WHISPER" then
+	if chatType == "WHISPER" and not isGM then
 		sender = self:GetFullCharacterName(sender)
 	end
 	if not self:IsThreadActive(sender, chatType) then
-		self:CreateThread(sender, chatType, flags == "GM" or nil)
+		self:CreateThread(sender, chatType, isGM or nil)
 	end
 	local thread = self:GetThread(sender, chatType)
 	if chatType == "WHISPER" then
@@ -201,12 +206,15 @@ local suppress = {
 	combat = function() return UnitAffectingCombat("player") end,
 	encounter = IsEncounterInProgress,
 	pvp = function()
+		local isInstance, instanceType = IsInInstance()
+		if instanceType ~= "pvp" and instanceType ~= "arena" then return end
 		for i = 1, 40 do
 			local spellID = select(11, UnitBuff("player", i))
 			if spellID == 44521 or spellID == 32727 then
-				return true
+				return
 			end
 		end
+		return true
 	end,
 	dnd = IsChatDND,
 }
