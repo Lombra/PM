@@ -275,7 +275,7 @@ scrollFrame.createButton = function(parent)
 	button.status = button:CreateTexture()
 	button.status:SetSize(16, 16)
 	button.status:SetPoint("LEFT")
-	button.status:SetTexture([[Interface\AddOns\PM\Untitled-2]])
+	button.status:SetTexture([[Interface\AddOns\PM\Status]])
 	
 	button.text = button:CreateFontString(nil, nil, "GameFontHighlightSmall")
 	button.text:SetPoint("LEFT", button.status, "RIGHT")
@@ -1097,28 +1097,30 @@ function PM:UpdateInfo()
 			if not selectedThread.targetID then
 				selectedThread.targetID = presenceID
 			end
-			local _, presenceName, _, _, toonName, toonID, client, isOnline, lastOnline, isAFK, isDND = BNGetFriendInfoByID(presenceID)
-			local _, toonName, _, realmName, _, faction, race, class, _, zoneName, level, gameText = BNGetToonInfo(toonID or presenceID)
-			infoPanel.icon:SetTexCoord(0, 1, 0, 1)
-			name = presenceName or UNKNOWN
-			if isAFK then
-				name = name.." |cffff8000"..CHAT_FLAG_AFK
-			elseif isDND then
-				name = name.." |cffff0000"..CHAT_FLAG_DND
-			elseif not isOnline then
-				name = name.." |cff808080("..FRIENDS_LIST_OFFLINE..")"
-			end
-			if toonName then
-				info = toonName or ""
-				if client == BNET_CLIENT_WOW then
-					if zoneName and zoneName ~= "" then
-						info = info.." - "..zoneName
-					end
-				else
-					info = info.." - "..gameText
+			if presenceID then
+				local _, presenceName, _, _, toonName, toonID, client, isOnline, lastOnline, isAFK, isDND = BNGetFriendInfoByID(presenceID)
+				local _, toonName, _, realmName, _, faction, race, class, _, zoneName, level, gameText = BNGetToonInfo(toonID or presenceID)
+				infoPanel.icon:SetTexCoord(0, 1, 0, 1)
+				name = presenceName or UNKNOWN
+				if isAFK then
+					name = name.." |cffff8000"..CHAT_FLAG_AFK
+				elseif isDND then
+					name = name.." |cffff0000"..CHAT_FLAG_DND
+				elseif not isOnline then
+					name = name.." |cff808080("..FRIENDS_LIST_OFFLINE..")"
 				end
+				if toonName then
+					info = toonName or ""
+					if client == BNET_CLIENT_WOW then
+						if zoneName and zoneName ~= "" then
+							info = info.." - "..zoneName
+						end
+					else
+						info = info.." - "..gameText
+					end
+				end
+				texture = BNet_GetClientTexture(client)
 			end
-			texture = BNet_GetClientTexture(client)
 		end
 	else
 		-- try various means of getting information about the target

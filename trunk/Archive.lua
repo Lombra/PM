@@ -19,7 +19,7 @@ local function sortThreads(a, b)
 	if a.type ~= b.type then
 		return a.type < b.type
 	else
-		return a.target < b.target
+		return (a.target or a.battleTag or UNKNOWN) < (b.target or b.battleTag or UNKNOWN)
 	end
 end
 
@@ -43,7 +43,7 @@ menu.initialize = function(self)
 	sort(sortedThreads, sortThreads)
 	for i, thread in ipairs(sortedThreads) do
 		local info = UIDropDownMenu_CreateInfo()
-		info.text = Ambiguate(thread.target or UNKNOWN, "none")
+		info.text = Ambiguate(thread.target or thread.battleTag or UNKNOWN, "none")
 		info.func = onClick
 		info.arg1 = thread.target
 		info.arg2 = thread.type
@@ -178,7 +178,7 @@ end
 local searchBox = PM:CreateEditbox(frame, true)
 searchBox:SetWidth(128)
 searchBox:SetPoint("TOPRIGHT", -16, -33)
-searchBox:SetScript("OnTextChanged", function(self, isUserInput)
+searchBox:HookScript("OnTextChanged", function(self, isUserInput)
 	if isUserInput then
 		searchPosition = 1
 		if search(self:GetText()) then
