@@ -120,14 +120,14 @@ for event in pairs(chatEvents) do
 end
 
 function PM:HandleChatEvent(event, ...)
-	local filter, message, sender, language, channelString, target, flags, _, _, channelName, _, _, guid, presenceID = messageEventFilter(event, ...)
+	local filter, message, sender, language, channelString, target, flags, _, _, channelName, _, _, guid, bnetIDAccount = messageEventFilter(event, ...)
 	if filter then
 		return
 	end
 	local isGM = (flags == "GM")
 	local chatType = Chat_GetChatCategory(event:sub(10))
 	if chatType == "WHISPER" and not isGM then
-		sender = self:GetFullCharacterName(sender)
+			sender = self:GetFullCharacterName(sender)
 	end
 	if not self:IsThreadActive(sender, chatType) then
 		self:CreateThread(sender, chatType, isGM or nil)
@@ -137,7 +137,7 @@ function PM:HandleChatEvent(event, ...)
 		thread.targetID = guid
 	end
 	if chatType == "BN_WHISPER" then
-		thread.targetID = presenceID
+		thread.targetID = bnetIDAccount
 	end
 	local shouldSuppress = self:ShouldSuppress()
 	local messageType = chatEvents[event]
@@ -159,6 +159,7 @@ function PM:HandleChatEvent(event, ...)
 		ChatEdit_SetLastTellTarget(sender, chatType)
 		PlaySoundFile(LSM:Fetch("sound", self.db.sound), "MASTER")
 		-- PlaySoundFile([[Interface\AddOns\PM\Whisper.ogg]], "MASTER")
+		FlashClientIcon()
 	end
 end
 
