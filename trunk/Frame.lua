@@ -148,14 +148,14 @@ local function setButtonStatus(button, showStatus, isOnline, isAFK, isDND)
 	button.status:SetShown(showStatus)
 	button.shadow:SetShown(showStatus)
 	if showStatus then
-		if isAFK then
+		if not isOnline then
+			button.status:SetVertexColor(0.2, 0.2, 0.2)
+		elseif isAFK then
 			button.status:SetVertexColor(1, 0.5, 0)
 		elseif isDND then
 			button.status:SetVertexColor(1, 0, 0)
-		elseif isOnline then
-			button.status:SetVertexColor(0, 1, 0)
 		else
-			button.status:SetVertexColor(0.2, 0.2, 0.2)
+			button.status:SetVertexColor(0, 1, 0)
 		end
 	end
 end
@@ -233,9 +233,9 @@ scrollFrame.updateButton = function(button, index)
 	end
 	
 	if object.type == "BN_WHISPER" then
-		local presenceID = object.target and GetAutoCompletePresenceID(object.target)
-		if presenceID then
-			local presenceID, presenceName, battleTag, isBattleTagPresence, _, _, client, isOnline, _, isAFK, isDND = BNGetFriendInfoByID(presenceID)
+		local bnetIDAccount = object.target and GetAutoCompletePresenceID(object.target)
+		if bnetIDAccount then
+			local bnetIDAccount, accountName, battleTag, isBattleTag, _, _, client, isOnline, _, isAFK, isDND = BNGetFriendInfoByID(bnetIDAccount)
 			button.text:SetText(object.target or UNKNOWN)
 			button.icon:Show()
 			button.icon:SetTexture(BNet_GetClientTexture(client))
@@ -280,6 +280,7 @@ scrollFrame.createButton = function(parent)
 	button.text = button:CreateFontString(nil, nil, "GameFontHighlightSmall")
 	button.text:SetPoint("LEFT", button.status, "RIGHT")
 	button.text:SetJustifyH("LEFT")
+	button.text:SetWordWrap(false)
 	
 	button.icon = button:CreateTexture()
 	button.icon:SetSize(16, 16)
@@ -348,34 +349,34 @@ infoPanel:SetScript("OnEnter", function(self)
 	
 	if thread.type ~= "BN_WHISPER" then return end
 	
-	local presenceID, presenceName, battleTag, isBattleTagPresence, toonName, toonID, client, isOnline, lastOnline, isAFK, isDND, broadcastText, noteText, _, broadcastTime = BNGetFriendInfoByID(thread.targetID)
+	local bnetIDAccount, accountName, battleTag, isBattleTag, characterName, bnetIDGameAccount, client, isOnline, lastOnline, isAFK, isDND, broadcastText, noteText, _, broadcastTime = BNGetFriendInfoByID(thread.targetID)
 	
 	if not isOnline then return end
 	
 	GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-	GameTooltip:AddLine(presenceName, HIGHLIGHT_FONT_COLOR.r, HIGHLIGHT_FONT_COLOR.g, HIGHLIGHT_FONT_COLOR.b)
+	GameTooltip:AddLine(accountName, HIGHLIGHT_FONT_COLOR.r, HIGHLIGHT_FONT_COLOR.g, HIGHLIGHT_FONT_COLOR.b)
 	-- GameTooltip:AddLine(battleTag)
 	GameTooltip:AddLine(broadcastText, BATTLENET_FONT_COLOR.r, BATTLENET_FONT_COLOR.g, BATTLENET_FONT_COLOR.b, true)
 	GameTooltip:AddLine(noteText)
 	
-	local _, toonName, _, realmName, realmID, faction, race, class, _, zoneName, level, gameText = BNGetToonInfo(toonID)
+	local _, characterName, _, realmName, realmID, faction, race, class, _, zoneName, level, gameText = BNGetGameAccountInfo(bnetIDGameAccount)
 	GameTooltip:AddLine(" ")
 	GameTooltip:AddLine(client)
 	if client == BNET_CLIENT_WOW then
 		local color = (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[reverseclassnames[class]]
-		GameTooltip:AddLine(toonName, color.r, color.g, color.b)
+		GameTooltip:AddLine(characterName, color.r, color.g, color.b)
 		GameTooltip:AddLine(format(TOOLTIP_UNIT_LEVEL_RACE_CLASS, level, race, class))
 		GameTooltip:AddLine(zoneName)
 		GameTooltip:AddLine(realmName)
 		GameTooltip:AddLine(faction)
 	else
-		GameTooltip:AddLine(toonName)
+		GameTooltip:AddLine(characterName)
 		GameTooltip:AddLine(gameText)
 	end
 	local friendIndex = BNGetFriendIndex(thread.targetID)
-	for toonIndex = 1, BNGetNumFriendToons(friendIndex) do
-		local hasFocus, toonName, client, realmName, realmID, faction, race, class, guild, zoneName, level, gameText = BNGetFriendToonInfo(friendIndex, toonIndex)
-		if not hasFocus then
+	for toonIndex = 1, BNGetNumFriendGameAccounts(friendIndex) do
+		local hasFocus, characterName, client, realmName, realmID, faction, race, class, guild, zoneName, level, gameText = BNGetFriendGameAccountInfo(friendIndex, toonIndex)
+		if not hasFocus and client ~= BNET_CLIENT_APP and client ~= BNET_CLIENT_CLNT then
 			GameTooltip:AddLine(" ")
 			if client == BNET_CLIENT_WOW then
 				GameTooltip:AddLine(format(TOOLTIP_UNIT_LEVEL_RACE_CLASS, level, race, class))
@@ -384,7 +385,7 @@ infoPanel:SetScript("OnEnter", function(self)
 				GameTooltip:AddLine(zoneName)
 			else
 				GameTooltip:AddLine(client)
-				GameTooltip:AddLine(toonName)
+				GameTooltip:AddLine(characterName)
 				GameTooltip:AddLine(gameText)
 			end
 		end
@@ -405,7 +406,7 @@ infoPanel.toon = infoPanel:CreateFontString(nil, nil, "GameFontHighlightSmall")
 infoPanel.toon:SetPoint("BOTTOMLEFT", infoPanel.icon, "BOTTOMRIGHT", 8, -1)
 
 local function createConversation(self, target)
-	BNConversationInvite_NewConversation(BNet_GetPresenceID(target))
+	BNConversationInvite_NewConversation(BNet_GetBNetIDAccount(target))
 end
 
 local function invite(self, target)
@@ -432,7 +433,7 @@ local function ignore(self, target)
 end
 
 local function viewFriends(self, target)
-	FriendsFriendsFrame_Show(BNet_GetPresenceID(target))
+	FriendsFriendsFrame_Show(BNet_GetBNetIDAccount(target))
 end
 
 local function openArchive(self, target, chatType)
@@ -475,15 +476,15 @@ menuButton.menu.initialize = function(self, level)
 		else
 			-- if more than 1 invitable toon, then make a submenu here, otherwise invite directly
 			local index = BNGetFriendIndex(thread.targetID)
-			local numToons = BNGetNumFriendToons(index)
-			if numToons > 1 then
+			local numGameAccounts = BNGetNumFriendGameAccounts(index)
+			if numGameAccounts > 1 then
 				local numValidToons = 0
 				local lastToonID
-				for i = 1, numToons do
-					local _, _, client, _, realmID, faction, _, _, _, _, _, _, _, _, _, toonID = BNGetFriendToonInfo(index, i)
+				for i = 1, numGameAccounts do
+					local _, _, client, _, realmID, faction, _, _, _, _, _, _, _, _, _, bnetIDGameAccount = BNGetFriendGameAccountInfo(index, i)
 					if client == BNET_CLIENT_WOW and faction == playerFactionGroup and realmID ~= 0 then
 						numValidToons = numValidToons + 1
-						lastToonID = toonID
+						lastToonID = bnetIDGameAccount
 					end
 				end
 				if numValidToons > 1 then
@@ -495,11 +496,11 @@ menuButton.menu.initialize = function(self, level)
 					info.disabled = true
 				end
 			else
-				local _, _, _, _, _, toonID = BNGetFriendInfo(index)
-				local _, _, client, _, realmID, faction = BNGetToonInfo(thread.targetID)
+				local _, _, _, _, _, bnetIDGameAccount = BNGetFriendInfo(index)
+				local _, _, client, _, realmID, faction = BNGetGameAccountInfo(thread.targetID)
 				if client == BNET_CLIENT_WOW and faction == playerFactionGroup and realmID ~= 0 then
 					info.func = inviteBNet
-					info.arg1 = toonID
+					info.arg1 = bnetIDGameAccount
 				else
 					info.disabled = true
 				end
@@ -530,9 +531,9 @@ menuButton.menu.initialize = function(self, level)
 		
 		local target = thread.target
 		if thread.type == "BN_WHISPER" then
-			local _, _, _, _, toonName, _, client = BNGetFriendInfoByID(thread.targetID)
+			local _, _, _, _, characterName, _, client = BNGetFriendInfoByID(thread.targetID)
 			if client == BNET_CLIENT_WOW then
-				target = toonName
+				target = characterName
 			end
 		end
 		local info = UIDropDownMenu_CreateInfo()
@@ -566,14 +567,14 @@ menuButton.menu.initialize = function(self, level)
 	if level == 2 then
 		-- LE_PARTY_CATEGORY_HOME
 		-- list all invitable toons
-		local index = BNGetFriendIndex(BNet_GetPresenceID(UIDROPDOWNMENU_MENU_VALUE))
-		for i = 1, BNGetNumFriendToons(index) do
-			local _, toonName, client, _, realmID, faction, _, _, _, _, _, _, _, _, _, toonID = BNGetFriendToonInfo(index, i)
+		local index = BNGetFriendIndex(BNet_GetBNetIDAccount(UIDROPDOWNMENU_MENU_VALUE))
+		for i = 1, BNGetNumFriendGameAccounts(index) do
+			local _, characterName, client, _, realmID, faction, _, _, _, _, _, _, _, _, _, bnetIDGameAccount = BNGetFriendGameAccountInfo(index, i)
 			if client == BNET_CLIENT_WOW and faction == playerFactionGroup and realmID ~= 0 then
 				local info = UIDropDownMenu_CreateInfo()
-				info.text = toonName
+				info.text = characterName
 				info.func = inviteBNet
-				info.arg1 = toonID
+				info.arg1 = bnetIDGameAccount
 				info.notCheckable = true
 				self:AddButton(info, level)
 			end
@@ -683,15 +684,15 @@ editbox:SetScript("OnEnterPressed", function(self)
 			end
 		elseif type == "BN_WHISPER" then
 			local target = self:GetAttribute("tellTarget")
-			local presenceID = BNet_GetPresenceID(target)
-			if presenceID then
+			local bnetIDAccount = BNet_GetBNetIDAccount(target)
+			if bnetIDAccount then
 				ChatEdit_SetLastToldTarget(target, type)
 				if #text > MAX_MESSAGE_LENGTH then
 					for i, message in ipairs(splitMessage(text)) do
-						BNSendWhisper(presenceID, message)
+						BNSendWhisper(bnetIDAccount, message)
 					end
 				else
-					BNSendWhisper(presenceID, text)
+					BNSendWhisper(bnetIDAccount, text)
 				end
 			else
 				local info = ChatTypeInfo["SYSTEM"]
@@ -881,8 +882,8 @@ local function insert(target, chatType)
 end
 
 local function addBNetFriend(index)
-	local presenceID, presenceName = BNGetFriendInfo(index)
-	insert(presenceName, "BN_WHISPER")
+	local bnetIDAccount, accountName = BNGetFriendInfo(index)
+	insert(accountName, "BN_WHISPER")
 end
 
 local function addWoWFriend(index)
@@ -983,7 +984,7 @@ end
 function PM:SelectThread(target, chatType)
 	local thread = self:GetThread(target, chatType)
 	if thread == self:GetSelectedThread() then return end
-	self.selectedChat = thread
+	self.selectedThread = thread
 	self.db.selectedTarget = target
 	self.db.selectedType = chatType
 	if chatType == "BN_WHISPER" then
@@ -1093,21 +1094,21 @@ function PM:UpdateInfo()
 		if not selectedThread.target then
 			name = UNKNOWN
 		else
-			local presenceID = BNet_GetPresenceID(selectedThread.target)
+			local bnetIDAccount = BNet_GetBNetIDAccount(selectedThread.target)
 			if not selectedThread.targetID then
-				selectedThread.targetID = presenceID
+				selectedThread.targetID = bnetIDAccount
 			end
-			if presenceID then
-				local _, presenceName, _, _, toonName, toonID, client, isOnline, lastOnline, isAFK, isDND = BNGetFriendInfoByID(presenceID)
-				local _, toonName, _, realmName, _, faction, race, class, _, zoneName, level, gameText = BNGetToonInfo(toonID or presenceID)
+			if bnetIDAccount then
+				local _, accountName, _, _, characterName, bnetIDGameAccount, client, isOnline, lastOnline, isBnetAFK, isBnetDND = BNGetFriendInfoByID(bnetIDAccount)
+				local _, toonName, _, realmName, _, faction, race, class, _, zoneName, level, gameText, _, _, _, _, _, isGameAFK, isGameBusy = BNGetGameAccountInfo(bnetIDGameAccount or bnetIDAccount)
 				infoPanel.icon:SetTexCoord(0, 1, 0, 1)
-				name = presenceName or UNKNOWN
-				if isAFK then
-					name = name.." |cffff8000"..CHAT_FLAG_AFK
-				elseif isDND then
-					name = name.." |cffff0000"..CHAT_FLAG_DND
-				elseif not isOnline then
+				name = accountName or UNKNOWN
+				if not isOnline then
 					name = name.." |cff808080("..FRIENDS_LIST_OFFLINE..")"
+				elseif isBnetAFK or isGameAFK then
+					name = name.." |cffff8000"..CHAT_FLAG_AFK
+				elseif isBnetDND or isGameBusy then
+					name = name.." |cffff0000"..CHAT_FLAG_DND
 				end
 				if toonName then
 					info = toonName or ""

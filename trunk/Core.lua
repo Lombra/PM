@@ -7,9 +7,9 @@ Libra:EmbedWidgets(PM)
 local function getPresenceByTag(battleTagQuery)
 	if not battleTagQuery then return end
 	for i = 1, BNGetNumFriends() do
-		local presenceID, presenceName, battleTag, isBattleTagPresence = BNGetFriendInfo(i)
+		local bnetIDAccount, accountName, battleTag, isBattleTag = BNGetFriendInfo(i)
 		if battleTag == battleTagQuery then
-			return presenceName, presenceID
+			return accountName, bnetIDAccount
 		end
 	end
 	-- print("Unable to resolve BattleTag", battleTagQuery)
@@ -227,16 +227,16 @@ function PM:BN_SELF_OFFLINE(...)
 	-- print("BN_SELF_OFFLINE", ...)
 end
 
-function PM:BN_FRIEND_ACCOUNT_ONLINE(presenceID)
-	local thread = self:GetThread(select(2, BNGetFriendInfoByID(presenceID)), "BN_WHISPER", true)
+function PM:BN_FRIEND_ACCOUNT_ONLINE(bnetIDAccount)
+	local thread = self:GetThread(select(2, BNGetFriendInfoByID(bnetIDAccount)), "BN_WHISPER", true)
 	if thread then
 		self:SaveMessage(thread, nil, "%s has come online.")
 	end
 end
 
-function PM:BN_FRIEND_ACCOUNT_OFFLINE(presenceID)
+function PM:BN_FRIEND_ACCOUNT_OFFLINE(bnetIDAccount)
 	if not BNConnected() then return end
-	local thread = self:GetThread(select(2, BNGetFriendInfoByID(presenceID)), "BN_WHISPER", true)
+	local thread = self:GetThread(select(2, BNGetFriendInfoByID(bnetIDAccount)), "BN_WHISPER", true)
 	if thread then
 		self:SaveMessage(thread, nil, "%s has gone offline.")
 	end
@@ -245,7 +245,7 @@ end
 function PM:BN_TOON_NAME_UPDATED(id, toonName, dunno)
 end
 
-function PM:CHAT_MSG_BN_WHISPER_PLAYER_OFFLINE(message, sender, language, channelString, target, flags, _, _, channelName, _, _, guid, presenceID)
+function PM:CHAT_MSG_BN_WHISPER_PLAYER_OFFLINE(message, sender, language, channelString, target, flags, _, _, channelName, _, _, guid, bnetIDAccount)
 	local thread = self:GetThread(sender, "BN_WHISPER", true)
 	if thread then
 		self:SaveMessage(sender, "BN_WHISPER", nil, message)
@@ -376,7 +376,7 @@ function PM:CloseThread(target, chatType)
 			thread = self:GetThread(target, chatType)
 			if #activeThreads == 0 then
 				PMFrame:Hide()
-				self.selectedChat = nil
+				self.selectedThread = nil
 			elseif thread == self:GetSelectedThread() then
 				local thread = activeThreads[i] or activeThreads[i - 1]
 				self:SelectThread(thread.target, thread.type)
@@ -407,13 +407,13 @@ function PM:CloseThread(target, chatType)
 end
 
 function PM:GetSelectedThread()
-	return self.selectedChat
+	return self.selectedThread
 end
 
-function PM:GetBattleTag(presenceName)
-	local presenceID = GetAutoCompletePresenceID(presenceName)
-	if presenceID then
-		local presenceID, presenceName, battleTag = BNGetFriendInfoByID(presenceID)
+function PM:GetBattleTag(accountName)
+	local bnetIDAccount = BNet_GetBNetIDAccount(accountName)
+	if bnetIDAccount then
+		local bnetIDAccount, accountName, battleTag = BNGetFriendInfoByID(bnetIDAccount)
 		return battleTag
 	end
 end
