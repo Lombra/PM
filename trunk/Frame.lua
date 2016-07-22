@@ -9,6 +9,7 @@ for k,v in pairs(LOCALIZED_CLASS_NAMES_FEMALE) do reverseclassnames[v] = k end
 
 local threadListItems = {}
 
+
 local frame = CreateFrame("Frame", "PMFrame", UIParent, "BasicFrameTemplate")
 frame.TitleText:SetText("PM")
 frame:SetToplevel(true)
@@ -306,13 +307,15 @@ scrollFrame.createButton = function(parent)
 	flash:SetAllPoints()
 	flash:SetTexture([[Interface\Buttons\UI-Listbox-Highlight2]])
 	flash:SetVertexColor(0.196, 0.388, 0.8)
+	flash:SetBlendMode("ADD")
 	flash:SetAlpha(0)
 	
 	button.flash = flash:CreateAnimationGroup()
 	button.flash:SetLooping("BOUNCE")
 	
 	local fade = button.flash:CreateAnimation("Alpha")
-	fade:SetChange(1)
+	fade:SetFromAlpha(0)
+	fade:SetToAlpha(1)
 	fade:SetDuration(0.8)
 	fade:SetSmoothing("OUT")
 	
@@ -405,10 +408,6 @@ infoPanel.target:SetPoint("TOPLEFT", infoPanel.icon, "TOPRIGHT", 8, 1)
 infoPanel.toon = infoPanel:CreateFontString(nil, nil, "GameFontHighlightSmall")
 infoPanel.toon:SetPoint("BOTTOMLEFT", infoPanel.icon, "BOTTOMRIGHT", 8, -1)
 
-local function createConversation(self, target)
-	BNConversationInvite_NewConversation(BNet_GetBNetIDAccount(target))
-end
-
 local function invite(self, target)
 	InviteUnit(Ambiguate(target, "none"))
 end
@@ -456,16 +455,6 @@ menuButton.menu.relativeTo = menuButton
 menuButton.menu.initialize = function(self, level)
 	if level == 1 then
 		local thread = UIDROPDOWNMENU_MENU_VALUE
-		
-		if thread.type == "BN_WHISPER" then
-			local info = UIDropDownMenu_CreateInfo()
-			info.text = CREATE_CONVERSATION_WITH
-			info.func = createConversation
-			info.arg1 = thread.target
-			info.arg2 = thread.type
-			info.notCheckable = true
-			self:AddButton(info, level)
-		end
 		
 		local info = UIDropDownMenu_CreateInfo()
 		info.text = INVITE
@@ -733,6 +722,7 @@ editbox:SetScript("OnEditFocusLost", function(self)
 	ACTIVE_CHAT_EDIT_BOX = nil
 	if PM.db.clearEditboxOnFocusLost then
 		self:SetText("")
+		PM:GetSelectedThread().editboxText = nil
 	end
 end)
 editbox:SetScript("OnTextChanged", function(self, isUserInput)
@@ -833,7 +823,8 @@ flash:SetLooping("BOUNCE")
 scrollToBottom.flash = flash
 
 local fade = flash:CreateAnimation("Alpha")
-fade:SetChange(1)
+fade:SetFromAlpha(0)
+fade:SetToAlpha(1)
 fade:SetDuration(0.8)
 fade:SetSmoothing("OUT")
 
@@ -1100,24 +1091,25 @@ function PM:UpdateInfo()
 			end
 			if bnetIDAccount then
 				local _, accountName, _, _, characterName, bnetIDGameAccount, client, isOnline, lastOnline, isBnetAFK, isBnetDND = BNGetFriendInfoByID(bnetIDAccount)
-				local _, toonName, _, realmName, _, faction, race, class, _, zoneName, level, gameText, _, _, _, _, _, isGameAFK, isGameBusy = BNGetGameAccountInfo(bnetIDGameAccount or bnetIDAccount)
+				local _, characterName, _, realmName, _, faction, race, class, _, zoneName, level, gameText, _, _, _, _, _, isGameAFK, isGameBusy = BNGetGameAccountInfo(bnetIDGameAccount or bnetIDAccount)
 				infoPanel.icon:SetTexCoord(0, 1, 0, 1)
 				name = accountName or UNKNOWN
 				if not isOnline then
 					name = name.." |cff808080("..FRIENDS_LIST_OFFLINE..")"
+					info = "|cff808080"..format(BNET_LAST_ONLINE_TIME, FriendsFrame_GetLastOnline(lastOnline))
 				elseif isBnetAFK or isGameAFK then
 					name = name.." |cffff8000"..CHAT_FLAG_AFK
 				elseif isBnetDND or isGameBusy then
 					name = name.." |cffff0000"..CHAT_FLAG_DND
 				end
-				if toonName then
-					info = toonName or ""
+				if characterName then
+					info = characterName or ""
 					if client == BNET_CLIENT_WOW then
 						if zoneName and zoneName ~= "" then
 							info = info.." - "..zoneName
 						end
 					else
-						info = info.." - "..gameText
+						info = gameText
 					end
 				end
 				texture = BNet_GetClientTexture(client)

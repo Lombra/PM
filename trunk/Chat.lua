@@ -24,7 +24,7 @@ end)
 local function openChat(target, chatType)
 	-- ChatFrame_SendSmartTell does not come with a chat type; figures out from target string
 	if not chatType then
-		if BNet_GetPresenceID(target) then
+		if BNet_GetBNetIDAccount(target) then
 			chatType = "BN_WHISPER"
 		else
 			chatType = "WHISPER"
