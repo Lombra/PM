@@ -19,19 +19,20 @@ frame:SetDontSavePosition(true)
 frame:RegisterForDrag("LeftButton")
 frame:SetScript("OnDragStart", frame.StartMoving)
 frame:SetScript("OnDragStop", function(self)
-	self:StopMovingOrSizing()
-	PM.db.point, PM.db.x, PM.db.y = select(3, self:GetPoint())
+			self:StopMovingOrSizing()
+			PM.db.point, PM.db.x, PM.db.y = select(3, self:GetPoint())
 end)
 frame:SetScript("OnShow", function(self)
-	PM:GetSelectedThread().unread = nil
-	PM:UpdateThreadList()
-	PM.db.shown = true
+			PM:GetSelectedThread().unread = nil
+			PM:UpdateThreadList()
+			PM.db.shown = true
 end)
 frame:SetScript("OnHide", function(self)
-	self:StopMovingOrSizing()
-	PM.db.point, PM.db.x, PM.db.y = select(3, self:GetPoint())
-	PM.db.shown = nil
+			self:StopMovingOrSizing()
+			PM.db.point, PM.db.x, PM.db.y = select(3, self:GetPoint())
+			PM.db.shown = nil
 end)
+
 
 
 local insetLeft = CreateFrame("Frame", nil, frame, "InsetFrameTemplate")
@@ -236,12 +237,13 @@ scrollFrame.updateButton = function(button, index)
 	if object.type == "BN_WHISPER" then
 		local bnetIDAccount = object.target and GetAutoCompletePresenceID(object.target)
 		if bnetIDAccount then
-			local bnetIDAccount, accountName, battleTag, isBattleTag, _, _, client, isOnline, _, isAFK, isDND = BNGetFriendInfoByID(bnetIDAccount)
+			local bnetIDAccount, accountName, battleTag, isBattleTag, _, bnetIDGameAccount, client, isOnline, _, isAFK, isDND = BNGetFriendInfoByID(bnetIDAccount)
+			local _, characterName, _, realmName, _, faction, race, class, _, zoneName, level, gameText, _, _, _, _, _, isGameAFK, isGameBusy = BNGetGameAccountInfo(bnetIDGameAccount or bnetIDAccount)
 			button.text:SetText(object.target or UNKNOWN)
 			button.icon:Show()
 			button.icon:SetTexture(BNet_GetClientTexture(client))
 			button.text:SetPoint("RIGHT", button.icon, "LEFT", -2, 0)
-			setButtonStatus(button, true, isOnline, isAFK, isDND)
+			setButtonStatus(button, true, isOnline, isAFK or isGameAFK, isDND or isGameBusy)
 		else
 			button.text:SetText(UNKNOWN)
 			setButtonStatus(button, false)
@@ -789,8 +791,6 @@ chatLog:SetScript("OnMouseWheel", function(self, delta)
 			self:ScrollDown()
 		end
 	end
-end)
-chatLog:SetScript("OnMessageScrollChanged", function(self)
 	local atBottom = self:AtBottom()
 	self.scrollToBottom:SetShown(not atBottom)
 end)
@@ -836,19 +836,29 @@ fade:SetSmoothing("OUT")
 -- BN_WHISPER
 -- BN_WHISPER_INFORM
 
+function PM:UpdateColorByID(chatType, r, g, b)
+	local function TransformColorByID(text, messageR, messageG, messageB, messageChatTypeID, messageAccessID, lineID)
+		if messageChatTypeID == chatType then
+			return true, r, g, b
+		end
+		return false
+	end
+	chatLog:AdjustMessageColors(TransformColorByID)
+end
+
 function PM:UPDATE_CHAT_COLOR(chatType, r, g, b)
 	if not self.db.useDefaultColor[chatType] then return end
-	chatLog:UpdateColorByID(GetChatTypeIndex(chatType), r, g, b)
-	chatLog:UpdateColorByID(GetChatTypeIndex(chatType.."_INFORM"), r, g, b)
+	self:UpdateColorByID(GetChatTypeIndex(chatType), r, g, b)
+	self:UpdateColorByID(GetChatTypeIndex(chatType.."_INFORM"), r, g, b)
 end
 
 function PM:UpdateChatColor(chatType, r, g, b)
 	local color = self.db.useDefaultColor[chatType] and ChatTypeInfo[chatType] or self.db.color[chatType]
-	chatLog:UpdateColorByID(GetChatTypeIndex(chatType), color.r, color.g, color.b)
+	self:UpdateColorByID(GetChatTypeIndex(chatType), color.r, color.g, color.b)
 	if not self.db.useDefaultColor[chatType] and self.db.separateOutgoingColor then
 		color = self.db.color[chatType.."_INFORM"]
 	end
-	chatLog:UpdateColorByID(GetChatTypeIndex(chatType.."_INFORM"), color.r, color.g, color.b)
+	self:UpdateColorByID(GetChatTypeIndex(chatType.."_INFORM"), color.r, color.g, color.b)
 end
 
 function PM:Show()
@@ -948,11 +958,21 @@ local function printMessage(thread, messageIndex, addToTop)
 			message1, message2 = message2, message1
 			time1, time2 = time2, time1
 		end
-		chatLog:AddMessage(PM:GetDateStamp(time1), 0.8, 0.8, 0.8, nil, addToTop)
-		chatLog:AddMessage(" ", 1, 1, 1, nil, addToTop)
-		chatLog:AddMessage(PM:GetDateStamp(time2), 0.8, 0.8, 0.8, nil, addToTop)
+		if addToTop then
+			chatLog:BackFillMessage(PM:GetDateStamp(time1), 0.8, 0.8, 0.8)
+			chatLog:BackFillMessage(" ")
+			chatLog:BackFillMessage(PM:GetDateStamp(time2), 0.8, 0.8, 0.8)
+		else
+			chatLog:AddMessage(PM:GetDateStamp(time1), 0.8, 0.8, 0.8)
+			chatLog:AddMessage(" ")
+			chatLog:AddMessage(PM:GetDateStamp(time2), 0.8, 0.8, 0.8)
+		end
 	elseif not message1.active and (not message2 or message2.active) then
-		chatLog:AddMessage(" ", 1, 1, 1, nil, addToTop)
+		if addToTop then
+			chatLog:BackFillMessage(" ")
+		else
+			chatLog:AddMessage(" ")
+		end
 	end
 	if addToTop then
 		PM:PrintMessage(thread, message1, addToTop)
@@ -1071,7 +1091,11 @@ function PM:PrintMessage(thread, message, addToTop)
 	end
 	message.unread = nil
 	-- lastMessageType = messageType
-	chatLog:AddMessage(messageText, r, g, b, isActive and GetChatTypeIndex(chatType), addToTop, accessID, extraData)
+	if addToTop then
+		chatLog:BackFillMessage(messageText, r, g, b, isActive and GetChatTypeIndex(chatType), accessID, extraData)
+	else
+		chatLog:AddMessage(messageText, r, g, b, isActive and GetChatTypeIndex(chatType), accessID, extraData)
+	end
 	if not addToTop and not chatLog:AtBottom() and not scrollToBottom.flash:IsPlaying() then
 		scrollToBottom.flash:Play()
 	end
