@@ -740,6 +740,10 @@ editbox:SetScript("OnUpdate", function(self)
 end)
 
 
+
+
+
+
 local chatLogInset = CreateFrame("Frame", nil, frame, "InsetFrameTemplate")
 chatLogInset:SetPoint("TOP", infoPanel, "BOTTOM", 0, 0)
 chatLogInset:SetPoint("RIGHT", PANEL_INSET_RIGHT_OFFSET, 0)
@@ -758,6 +762,7 @@ local linkTypes = {
 	talent = true,
 }
 
+
 local chatLog = CreateFrame("ScrollingMessageFrame", nil, chatLogInset)
 PM.chatLog = chatLog
 chatLog:SetPoint("TOPRIGHT", -6, -6)
@@ -767,6 +772,7 @@ chatLog:SetJustifyH("LEFT")
 chatLog:SetFading(false)
 chatLog:SetIndentedWordWrap(true)
 -- chatLog:SetToplevel(true)
+chatLog:SetHyperlinksEnabled(true)
 chatLog:SetScript("OnHyperlinkClick", ChatFrame_OnHyperlinkShow)
 chatLog:SetScript("OnHyperlinkEnter", function(self, link, ...)
 	if linkTypes[link:match("^([^:]+)")] then
@@ -1100,6 +1106,7 @@ function PM:PrintMessage(thread, message, addToTop)
 		scrollToBottom.flash:Play()
 	end
 end
+
 
 function PM:UpdateInfo()
 	local selectedThread = self:GetSelectedThread()
