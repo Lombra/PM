@@ -797,8 +797,19 @@ chatLog:SetScript("OnMouseWheel", function(self, delta)
 			self:ScrollDown()
 		end
 	end
+end)
+
+
+chatLog:SetOnScrollChangedCallback(function(self)
 	local atBottom = self:AtBottom()
 	self.scrollToBottom:SetShown(not atBottom)
+	-- if processing then return end
+	local thread = PM:GetSelectedThread()
+	if atBottom then
+		thread.scroll = nil
+	else
+		thread.scroll = self:GetNumMessages() - self:GetScrollOffset()
+	end
 end)
 
 

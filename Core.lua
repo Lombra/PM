@@ -115,11 +115,12 @@ function PM:OnInitialize()
 		end
 	end
 	
+	self:UpdatePresences()
 	
 	self:CreateScrollButtons()
 	self:UpdateThreads()
 	
-	self:UpdatePresences()
+	self:UpdateSelection()
 	self:LoadSettings()
 	
 	local LSM = LibStub("LibSharedMedia-3.0")
@@ -193,6 +194,7 @@ end
 
 function PM:BN_FRIEND_LIST_SIZE_CHANGED()
 	self:UpdatePresences()
+	self:UpdateSelection()
 end
 
 function PM:PLAYER_FLAGS_CHANGED(unit)
@@ -213,6 +215,7 @@ end
 function PM:BN_CONNECTED(...)
 	-- presence IDs will have changed once Battle.net connection is reestablished
 	self:UpdatePresences()
+	self:UpdateSelection()
 end
 
 function PM:BN_DISCONNECTED(...)
@@ -274,7 +277,9 @@ function PM:UpdatePresences()
 	end
 	if lastTell then ChatEdit_SetLastTellTarget(lastTell, self.db.lastTellType) end
 	if lastTold then ChatEdit_SetLastToldTarget(lastTold, self.db.lastToldType) end
+end
 
+function PM:UpdateSelection()
 	if self.db.selectedType == "BN_WHISPER" then
 		local selectedTarget = getPresenceByTag(self.db.selectedBattleTag)
 		self.db.selectedTarget = selectedTarget
