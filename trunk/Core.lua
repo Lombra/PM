@@ -115,6 +115,7 @@ function PM:OnInitialize()
 		end
 	end
 	
+	
 	self:CreateScrollButtons()
 	self:UpdateThreads()
 	
@@ -273,7 +274,7 @@ function PM:UpdatePresences()
 	end
 	if lastTell then ChatEdit_SetLastTellTarget(lastTell, self.db.lastTellType) end
 	if lastTold then ChatEdit_SetLastToldTarget(lastTold, self.db.lastToldType) end
-	
+
 	if self.db.selectedType == "BN_WHISPER" then
 		local selectedTarget = getPresenceByTag(self.db.selectedBattleTag)
 		self.db.selectedTarget = selectedTarget
@@ -425,15 +426,13 @@ function PM:GetFullCharacterName(name)
 	return name
 end
 
-local MONTHS = {CalendarGetMonthNames()}
-
 function PM:GetDateStamp(timestamp)
 	local text
 	local currentTime = date("*t", time())
 	if (currentTime.yday == timestamp.yday and currentTime.year == timestamp.year) then
 		text = HONOR_TODAY
 	else
-		text = MONTHS[timestamp.month].." "..timestamp.day
+		text = CALENDAR_FULLDATE_MONTH_NAMES[timestamp.month].." "..timestamp.day
 	end
 	return "- "..text
 end
