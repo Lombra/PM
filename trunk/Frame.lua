@@ -9,30 +9,36 @@ for k,v in pairs(LOCALIZED_CLASS_NAMES_FEMALE) do reverseclassnames[v] = k end
 
 local threadListItems = {}
 
-
-local frame = CreateFrame("Frame", "PMFrame", UIParent, "BasicFrameTemplate")
-frame.TitleText:SetText("PM")
-frame:SetToplevel(true)
-frame:EnableMouse(true)
-frame:SetMovable(true)
-frame:SetDontSavePosition(true)
-frame:RegisterForDrag("LeftButton")
-frame:SetScript("OnDragStart", frame.StartMoving)
-frame:SetScript("OnDragStop", function(self)
+local frameStructure = {
+	name = "PMFrame",
+	inherits = "BasicFrameTemplate",
+	toplevel = true,
+	enableMouse = true,
+	movable = true,
+	dontSavePosition = true,
+	
+	scripts = {
+		OnDragStart = "StartMoving",
+		OnDragStop = function(self)
 			self:StopMovingOrSizing()
 			PM.db.point, PM.db.x, PM.db.y = select(3, self:GetPoint())
-end)
-frame:SetScript("OnShow", function(self)
+		end,
+		OnShow = function(self)
 			PM:GetSelectedThread().unread = nil
 			PM:UpdateThreadList()
 			PM.db.shown = true
-end)
-frame:SetScript("OnHide", function(self)
+		end,
+		OnHide = function(self)
 			self:StopMovingOrSizing()
 			PM.db.point, PM.db.x, PM.db.y = select(3, self:GetPoint())
 			PM.db.shown = nil
-end)
+		end,
+	}
+}
 
+local frame = PM:CreateFrame("Frame", UIParent, frameStructure)
+frame.TitleText:SetText("PM")
+frame:RegisterForDrag("LeftButton")
 
 
 local insetLeft = CreateFrame("Frame", nil, frame, "InsetFrameTemplate")
@@ -921,7 +927,7 @@ function PM:UpdateThreads()
 	end
 	
 	local numBNetTotal, numBNetOnline = BNGetNumFriends()
-	local numWoWTotal, numWoWOnline = GetNumFriends()
+	local numWoWTotal, numWoWOnline = C_FriendList.GetNumFriends(), C_FriendList.GetNumOnlineFriends()
 	
 	if self.db.threadListBNetFriends then
 		for i = 1, numBNetOnline do
