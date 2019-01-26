@@ -44,6 +44,7 @@ frame:RegisterForDrag("LeftButton")
 local insetLeft = CreateFrame("Frame", nil, frame, "InsetFrameTemplate")
 insetLeft:SetPoint("TOPLEFT", PANEL_INSET_LEFT_OFFSET, PANEL_INSET_TOP_OFFSET)
 insetLeft:SetPoint("BOTTOM", 0, PANEL_INSET_BOTTOM_OFFSET + 2)
+insetLeft.Bg:SetDrawLayer("BACKGROUND", 1)
 PM.threadListInset = insetLeft
 
 
@@ -755,6 +756,7 @@ chatLogInset:SetPoint("TOP", infoPanel, "BOTTOM", 0, 0)
 chatLogInset:SetPoint("RIGHT", PANEL_INSET_RIGHT_OFFSET, 0)
 chatLogInset:SetPoint("LEFT", insetLeft, "RIGHT", PANEL_INSET_LEFT_OFFSET, 0)
 chatLogInset:SetPoint("BOTTOM", editbox, "TOP", 0, 4)
+chatLogInset.Bg:SetDrawLayer("BACKGROUND", 1)
 PM.chatlogInset = chatLogInset
 
 local linkTypes = {
@@ -927,7 +929,8 @@ function PM:UpdateThreads()
 	end
 	
 	local numBNetTotal, numBNetOnline = BNGetNumFriends()
-	local numWoWTotal, numWoWOnline = C_FriendList.GetNumFriends(), C_FriendList.GetNumOnlineFriends()
+	local numWoWTotal = C_FriendList.GetNumFriends()
+	local numWoWOnline = C_FriendList.GetNumOnlineFriends() or 0
 	
 	if self.db.threadListBNetFriends then
 		for i = 1, numBNetOnline do
