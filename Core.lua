@@ -177,7 +177,7 @@ function PM:PLAYER_LOGOUT()
 end
 
 function PM:GetFriendInfo(name)
-	for i = 1, GetNumFriends() do
+	for i = 1, (C_FriendList.GetNumFriends() or 0) do
 		local name2, level, class, area, connected, status = GetFriendInfo(i)
 		if name2 == name then
 			return true, connected, status, level, class, area
