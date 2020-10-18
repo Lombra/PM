@@ -481,15 +481,15 @@ menuButton.menu.initialize = function(self, level)
 		else
 			-- if more than 1 invitable toon, then make a submenu here, otherwise invite directly
 			local index = BNGetFriendIndex(thread.targetID)
-			local numGameAccounts = BNGetNumFriendGameAccounts(index)
+			local numGameAccounts = C_BattleNet.GetFriendNumGameAccounts(index)
 			if numGameAccounts > 1 then
 				local numValidToons = 0
 				local lastToonID
 				for i = 1, numGameAccounts do
-					local _, _, client, _, realmID, faction, _, _, _, _, _, _, _, _, _, bnetIDGameAccount = BNGetFriendGameAccountInfo(index, i)
-					if client == BNET_CLIENT_WOW and faction == playerFactionGroup and realmID ~= 0 then
+					local gameAccountInfo = C_BattleNet.GetFriendGameAccountInfo(index, i)
+					if gameAccountInfo.clientProgram == BNET_CLIENT_WOW and gameAccountInfo.factionName == playerFactionGroup and gameAccountInfo.realmID ~= 0 then
 						numValidToons = numValidToons + 1
-						lastToonID = bnetIDGameAccount
+						lastToonID = gameAccountInfo.gameAccountID
 					end
 				end
 				if numValidToons > 1 then
@@ -501,11 +501,10 @@ menuButton.menu.initialize = function(self, level)
 					info.disabled = true
 				end
 			else
-				local _, _, _, _, _, bnetIDGameAccount = BNGetFriendInfo(index)
-				local _, _, client, _, realmID, faction = BNGetGameAccountInfo(thread.targetID)
-				if client == BNET_CLIENT_WOW and faction == playerFactionGroup and realmID ~= 0 then
+				local gameAccountInfo = C_BattleNet.GetGameAccountInfoByID(thread.targetID)
+				if gameAccountInfo.clientProgram == BNET_CLIENT_WOW and gameAccountInfo.factionName == playerFactionGroup and gameAccountInfo.realmID ~= 0 then
 					info.func = inviteBNet
-					info.arg1 = bnetIDGameAccount
+					info.arg1 = gameAccountInfo.gameAccountID
 				else
 					info.disabled = true
 				end
@@ -536,9 +535,9 @@ menuButton.menu.initialize = function(self, level)
 		
 		local target = thread.target
 		if thread.type == "BN_WHISPER" then
-			local _, _, _, _, characterName, _, client = BNGetFriendInfoByID(thread.targetID)
-			if client == BNET_CLIENT_WOW then
-				target = characterName
+			local accountInfo = C_BattleNet.GetAccountInfoByID(thread.targetID)
+			if accountInfo.gameAccountInfo.clientProgram == BNET_CLIENT_WOW then
+				target = accountInfo.gameAccountInfo.characterName
 			end
 		end
 		local info = UIDropDownMenu_CreateInfo()
@@ -573,11 +572,11 @@ menuButton.menu.initialize = function(self, level)
 		-- LE_PARTY_CATEGORY_HOME
 		-- list all invitable toons
 		local index = BNGetFriendIndex(BNet_GetBNetIDAccount(UIDROPDOWNMENU_MENU_VALUE))
-		for i = 1, BNGetNumFriendGameAccounts(index) do
-			local _, characterName, client, _, realmID, faction, _, _, _, _, _, _, _, _, _, bnetIDGameAccount = BNGetFriendGameAccountInfo(index, i)
-			if client == BNET_CLIENT_WOW and faction == playerFactionGroup and realmID ~= 0 then
+		for i = 1, C_BattleNet.GetFriendNumGameAccounts(index) do
+			local gameAccountInfo = C_BattleNet.GetFriendGameAccountInfo(index, i)
+			if gameAccountInfo.clientProgram == BNET_CLIENT_WOW and gameAccountInfo.factionName == playerFactionGroup and gameAccountInfo.realmID ~= 0 then
 				local info = UIDropDownMenu_CreateInfo()
-				info.text = characterName
+				info.text = gameAccountInfo.characterName
 				info.func = inviteBNet
 				info.arg1 = bnetIDGameAccount
 				info.notCheckable = true
