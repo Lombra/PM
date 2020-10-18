@@ -235,22 +235,23 @@ scrollFrame.updateButton = function(button, index)
 	
 	if object.type == "WHISPER" then
 		local name = Ambiguate(object.target, "none")
-		local isFriend, connected, status = PM:GetFriendInfo(name)
+		local isFriend, connected, isAFK, isDND = PM:GetFriendInfo(name)
 		button.text:SetText(name)
 		button.icon:Hide()
-		setButtonStatus(button, isFriend, connected, status == CHAT_FLAG_AFK, status == CHAT_FLAG_DND)
+		setButtonStatus(button, isFriend, connected, isAFK, isDND)
 	end
 	
 	if object.type == "BN_WHISPER" then
 		local bnetIDAccount = object.target and GetAutoCompletePresenceID(object.target)
 		if bnetIDAccount then
-			local bnetIDAccount, accountName, battleTag, isBattleTag, _, bnetIDGameAccount, client, isOnline, _, isAFK, isDND = BNGetFriendInfoByID(bnetIDAccount)
-			local _, characterName, _, realmName, _, faction, race, class, _, zoneName, level, gameText, _, _, _, _, _, isGameAFK, isGameBusy = BNGetGameAccountInfo(bnetIDGameAccount or bnetIDAccount)
+			local accountInfo = C_BattleNet.GetAccountInfoByID(bnetIDAccount)
 			button.text:SetText(object.target or UNKNOWN)
 			button.icon:Show()
-			button.icon:SetTexture(BNet_GetClientTexture(client))
+			button.icon:SetTexture(BNet_GetClientTexture(accountInfo.gameAccountInfo.clientProgram))
 			button.text:SetPoint("RIGHT", button.icon, "LEFT", -2, 0)
-			setButtonStatus(button, true, isOnline, isAFK or isGameAFK, isDND or isGameBusy)
+			local isAFK = accountInfo.isAFK or accountInfo.gameAccountInfo.isGameAFK
+			local isDND = accountInfo.isDND or accountInfo.gameAccountInfo.isGameBusy
+			setButtonStatus(button, true, accountInfo.gameAccountInfo.isOnline, isAFK, isDND)
 		else
 			button.text:SetText(UNKNOWN)
 			setButtonStatus(button, false)
@@ -753,10 +754,6 @@ editbox:SetScript("OnUpdate", function(self)
 end)
 
 
-
-
-
-
 local chatLogInset = CreateFrame("Frame", nil, frame, "InsetFrameTemplate")
 chatLogInset:SetPoint("TOP", infoPanel, "BOTTOM", 0, 0)
 chatLogInset:SetPoint("RIGHT", PANEL_INSET_RIGHT_OFFSET, 0)
@@ -914,13 +911,14 @@ local function insert(target, chatType)
 end
 
 local function addBNetFriend(index)
-	local bnetIDAccount, accountName = BNGetFriendInfo(index)
-	insert(accountName, "BN_WHISPER")
+	local accountInfo = C_BattleNet.GetFriendAccountInfo(index)
+	insert(accountInfo.accountName, "BN_WHISPER")
 end
 
 local function addWoWFriend(index)
-	local name = GetFriendInfo(index)
-	if not name then return end
+	local friendInfo = C_FriendList.GetFriendInfoByIndex(index)
+	if not friendInfo then return end
+	local name = friendInfo.name
 	if not name:match("%-") then
 		name = name.."-"..gsub(GetRealmName(), " ", "")
 	end
@@ -934,12 +932,15 @@ function PM:UpdateThreads()
 		tinsert(threadListItems, thread)
 	end
 	
-	local numBNetTotal, numBNetOnline = BNGetNumFriends()
+	local numBNetTotal, numBNetOnline, numBNetFavorite, numBNetFavoriteOnline = BNGetNumFriends()
 	local numWoWTotal = C_FriendList.GetNumFriends()
 	local numWoWOnline = C_FriendList.GetNumOnlineFriends() or 0
 	
 	if self.db.threadListBNetFriends then
-		for i = 1, numBNetOnline do
+		for i = 1, numBNetFavoriteOnline do
+			addBNetFriend(i)
+		end
+		for i = numBNetFavorite + 1, numBNetOnline + (numBNetFavorite - numBNetFavoriteOnline) do
 			addBNetFriend(i)
 		end
 	end
@@ -952,7 +953,10 @@ function PM:UpdateThreads()
 	
 	if self.db.threadListShowOffline then
 		if self.db.threadListBNetFriends then
-			for i = numBNetOnline + 1, numBNetTotal do
+			for i = numBNetFavoriteOnline + 1, numBNetFavorite do
+				addBNetFriend(i)
+			end
+			for i = numBNetOnline + (numBNetFavorite - numBNetFavoriteOnline) + 1, numBNetTotal do
 				addBNetFriend(i)
 			end
 		end
@@ -1181,7 +1185,7 @@ function PM:UpdateInfo()
 		local target = Ambiguate(selectedThread.target, "none")
 		name = target
 		-- friend list
-		local isFriend, connected, status, level, class, area = self:GetFriendInfo(target)
+		local isFriend, connected, isAFK, isDND, level, class, area = self:GetFriendInfo(target)
 		if isFriend and connected and level and level > 0 then
 			info = format("Level %d %s - %s", level, class, area)
 			infoPanel.icon:SetTexCoord(unpack(CLASS_ICON_TCOORDS[reverseclassnames[class]]))
