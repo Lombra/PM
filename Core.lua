@@ -7,9 +7,9 @@ Libra:EmbedWidgets(PM)
 local function getPresenceByTag(battleTagQuery)
 	if not battleTagQuery then return end
 	for i = 1, BNGetNumFriends() do
-		local bnetIDAccount, accountName, battleTag, isBattleTag = BNGetFriendInfo(i)
-		if battleTag == battleTagQuery then
-			return accountName, bnetIDAccount
+		local accountInfo = C_BattleNet.GetFriendAccountInfo(i)
+		if accountInfo.battleTag == battleTagQuery then
+			return accountInfo.accountName, accountInfo.bnetAccountID
 		end
 	end
 	-- print("Unable to resolve BattleTag", battleTagQuery)
@@ -177,11 +177,9 @@ function PM:PLAYER_LOGOUT()
 end
 
 function PM:GetFriendInfo(name)
-	for i = 1, (C_FriendList.GetNumFriends() or 0) do
-		local name2, level, class, area, connected, status = GetFriendInfo(i)
-		if name2 == name then
-			return true, connected, status, level, class, area
-		end
+	local friendInfo = C_FriendList.GetFriendInfo(name)
+	if friendInfo then
+		return true, friendInfo.connected, friendInfo.afk, friendInfo.dnd, friendInfo.level, friendInfo.className, friendInfo.area
 	end
 end
 
@@ -205,7 +203,7 @@ function PM:PLAYER_FLAGS_CHANGED(unit)
 end
 
 function PM:BN_FRIEND_INFO_CHANGED(index)
-	if index and self:GetSelectedThread() and (BNGetFriendInfo(index) == self:GetSelectedThread().targetID) then
+	if index and self:GetSelectedThread() and (C_BattleNet.GetFriendAccountInfo(index).bnetAccountID == self:GetSelectedThread().targetID) then
 		self:UpdateInfo()
 	end
 	-- print("IsLoggingOut:", IsLoggingOut())
@@ -419,8 +417,8 @@ end
 function PM:GetBattleTag(accountName)
 	local bnetIDAccount = BNet_GetBNetIDAccount(accountName)
 	if bnetIDAccount then
-		local bnetIDAccount, accountName, battleTag = BNGetFriendInfoByID(bnetIDAccount)
-		return battleTag
+		local accountInfo = C_BattleNet.GetAccountInfoByID(bnetIDAccount)
+		return accountInfo.battleTag
 	end
 end
 
