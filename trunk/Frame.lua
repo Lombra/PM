@@ -352,6 +352,24 @@ scrollFrame:SetScript("OnMouseWheel", function(self, delta, stepSize)
 end)
 
 
+local function addTooltipAccountInfo(gameAccountInfo)
+	local client = gameAccountInfo.clientProgram
+	if client == BNET_CLIENT_WOW then
+		local class = gameAccountInfo.className
+		local color = (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[reverseclassnames[class]]
+		GameTooltip:AddLine(client)
+		GameTooltip:AddLine(gameAccountInfo.characterName, color.r, color.g, color.b)
+		GameTooltip:AddLine(format(TOOLTIP_UNIT_LEVEL_RACE_CLASS, gameAccountInfo.characterLevel, gameAccountInfo.raceName, class))
+		GameTooltip:AddLine(gameAccountInfo.realmName)
+		GameTooltip:AddLine(gameAccountInfo.factionName)
+		GameTooltip:AddLine(gameAccountInfo.areaName)
+	elseif client ~= BNET_CLIENT_APP then
+		GameTooltip:AddLine(client)
+		GameTooltip:AddLine(gameAccountInfo.characterName)
+		GameTooltip:AddLine(gameAccountInfo.richPresence)
+	end
+end
+
 local infoPanel = CreateFrame("Frame", nil, frame)
 infoPanel:SetPoint("LEFT", insetLeft, "RIGHT", PANEL_INSET_LEFT_OFFSET, 0)
 infoPanel:SetPoint("TOPRIGHT", PANEL_INSET_RIGHT_OFFSET, PANEL_INSET_TOP_OFFSET)
@@ -364,7 +382,6 @@ infoPanel:SetScript("OnEnter", function(self)
 	
 	local accountInfo = C_BattleNet.GetAccountInfoByID(thread.targetID)
 	local gameAccountInfo = accountInfo.gameAccountInfo
-	local client = gameAccountInfo.clientProgram
 	
 	if not gameAccountInfo.isOnline then return end
 	
@@ -374,39 +391,16 @@ infoPanel:SetScript("OnEnter", function(self)
 	GameTooltip:AddLine(accountInfo.customMessage, BATTLENET_FONT_COLOR.r, BATTLENET_FONT_COLOR.g, BATTLENET_FONT_COLOR.b, true)
 	GameTooltip:AddLine(accountInfo.note)
 	
-	if client == BNET_CLIENT_WOW then
-		local class = gameAccountInfo.className
-		local color = (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[reverseclassnames[class]]
-		GameTooltip:AddLine(" ")
-		GameTooltip:AddLine(client)
-		GameTooltip:AddLine(gameAccountInfo.characterName, color.r, color.g, color.b)
-		GameTooltip:AddLine(format(TOOLTIP_UNIT_LEVEL_RACE_CLASS, gameAccountInfo.characterLevel, gameAccountInfo.raceName, class))
-		GameTooltip:AddLine(gameAccountInfo.areaName)
-		GameTooltip:AddLine(gameAccountInfo.realmName)
-		GameTooltip:AddLine(gameAccountInfo.factionName)
-	elseif client ~= BNET_CLIENT_APP then
-		GameTooltip:AddLine(" ")
-		GameTooltip:AddLine(client)
-		GameTooltip:AddLine(gameAccountInfo.characterName)
-		GameTooltip:AddLine(gameAccountInfo.richPresence)
-	end
+	GameTooltip:AddLine(" ")
+	addTooltipAccountInfo(gameAccountInfo)
+	
 	local friendIndex = BNGetFriendIndex(thread.targetID)
 	for accountIndex = 1, C_BattleNet.GetFriendNumGameAccounts(friendIndex) do
 		local gameAccountInfo = C_BattleNet.GetFriendGameAccountInfo(friendIndex, accountIndex)
 		local client = gameAccountInfo.clientProgram
 		if not gameAccountInfo.hasFocus and client ~= BNET_CLIENT_APP and client ~= BNET_CLIENT_CLNT and client ~= "BSAp" then
-			print(client)
 			GameTooltip:AddLine(" ")
-			if client == BNET_CLIENT_WOW then
-				GameTooltip:AddLine(format(TOOLTIP_UNIT_LEVEL_RACE_CLASS, gameAccountInfo.characterLevel, gameAccountInfo.raceName, gameAccountInfo.class))
-				GameTooltip:AddLine(gameAccountInfo.realmName)
-				GameTooltip:AddLine(gameAccountInfo.factionName)
-				GameTooltip:AddLine(gameAccountInfo.areaName)
-			else
-				GameTooltip:AddLine(client)
-				GameTooltip:AddLine(gameAccountInfo.characterName)
-				GameTooltip:AddLine(gameAccountInfo.richPresence)
-			end
+			addTooltipAccountInfo(gameAccountInfo)
 		end
 	end
 	
