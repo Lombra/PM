@@ -247,7 +247,7 @@ scrollFrame.updateButton = function(button, index)
 			local accountInfo = C_BattleNet.GetAccountInfoByID(bnetIDAccount)
 			button.text:SetText(object.target or UNKNOWN)
 			button.icon:Show()
-			button.icon:SetTexture(BNet_GetClientTexture(accountInfo.gameAccountInfo.clientProgram))
+			button.icon:SetTexture(BNet_GetBattlenetClientAtlas(accountInfo.gameAccountInfo.clientProgram))
 			button.text:SetPoint("RIGHT", button.icon, "LEFT", -2, 0)
 			local isAFK = accountInfo.isAFK or accountInfo.gameAccountInfo.isGameAFK
 			local isDND = accountInfo.isDND or accountInfo.gameAccountInfo.isGameBusy
@@ -1170,7 +1170,7 @@ function Telecom:UpdateInfo()
 						info = gameAccountInfo.richPresence
 					end
 				end
-				texture = BNet_GetClientTexture(client)
+				texture = BNet_GetBattlenetClientAtlas(client)
 			end
 		end
 	else
