@@ -1,22 +1,22 @@
-local addonName, PM = ...
+local addonName, Telecom = ...
 local LSM = LibStub("LibSharedMedia-3.0")
 
 
 hooksecurefunc("ChatEdit_SetLastTellTarget", function(target, chatType)
 	if chatType == "BN_WHISPER" then
-		target = PM:GetBattleTag(target)
+		target = Telecom:GetBattleTag(target)
 	end
 	if target then
-		PM.db.lastTell, PM.db.lastTellType = target, chatType
+		Telecom.db.lastTell, Telecom.db.lastTellType = target, chatType
 	end
 end)
 
 hooksecurefunc("ChatEdit_SetLastToldTarget", function(target, chatType)
 	if chatType == "BN_WHISPER" then
-		target = PM:GetBattleTag(target)
+		target = Telecom:GetBattleTag(target)
 	end
 	if target then
-		PM.db.lastTold, PM.db.lastToldType = target, chatType
+		Telecom.db.lastTold, Telecom.db.lastToldType = target, chatType
 	end
 end)
 
@@ -31,28 +31,28 @@ local function openChat(target, chatType)
 		end
 	end
 	if chatType == "WHISPER" then
-		target = PM:GetFullCharacterName(target)
+		target = Telecom:GetFullCharacterName(target)
 	end
-	if not PM:IsThreadActive(target, chatType) then
-		PM:CreateThread(target, chatType)
+	if not Telecom:IsThreadActive(target, chatType) then
+		Telecom:CreateThread(target, chatType)
 	end
-	PM:SelectThread(target, chatType)
-	PM:Show()
-	PM.editbox:SetFocus()
+	Telecom:SelectThread(target, chatType)
+	Telecom:Show()
+	Telecom.editbox:SetFocus()
 end
 
 local hooks = {
 	ChatFrame_ReplyTell = function(chatFrame)
 		local lastTell, lastTellType = ChatEdit_GetLastTellTarget()
 		if lastTell then
-			PM.editbox.setText = true
+			Telecom.editbox.setText = true
 			openChat(lastTell, lastTellType)
 		end
 	end,
 	ChatFrame_ReplyTell2 = function(chatFrame)
 		local lastTold, lastToldType = ChatEdit_GetLastToldTarget()
 		if lastTold then
-			PM.editbox.setText = true
+			Telecom.editbox.setText = true
 			openChat(lastTold, lastToldType)
 		end
 	end,
@@ -67,7 +67,7 @@ local hooks = {
 for functionName, hook in pairs(hooks) do
 	local originalFunction = _G[functionName]
 	_G[functionName] = function(...)
-		if PM:ShouldSuppress() then
+		if Telecom:ShouldSuppress() then
 			originalFunction(...)
 			return
 		end
@@ -82,7 +82,7 @@ local function messageEventFilter(event, arg1, arg2, arg3, arg4, arg5, arg6, arg
 	if chatFilters then
 		for _, filterFunc in pairs(chatFilters) do
 			local filter, newarg1, newarg2, newarg3, newarg4, newarg5, newarg6, newarg7, newarg8, newarg9, newarg10, newarg11, newarg12, newarg13, newarg14 =
-				filterFunc(PMFrame, event, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13, arg14)
+				filterFunc(TelecomFrame, event, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13, arg14)
 			if filter then
 				return true
 			elseif newarg1 then
@@ -104,11 +104,11 @@ local chatEvents = {
 
 local f = CreateFrame("Frame")
 f:SetScript("OnEvent", function(self, event, ...)
-	PM:HandleChatEvent(event, ...)
+	Telecom:HandleChatEvent(event, ...)
 end)
 
 local function filter(frame)
-	return frame ~= PMFrame and not (PM:ShouldSuppress() and PM.db.defaultHandlerWhileSuppressed)
+	return frame ~= TelecomFrame and not (Telecom:ShouldSuppress() and Telecom.db.defaultHandlerWhileSuppressed)
 end
 
 ChatFrame_AddMessageEventFilter("CHAT_MSG_AFK", filter)
@@ -119,7 +119,7 @@ for event in pairs(chatEvents) do
 	f:RegisterEvent(event)
 end
 
-function PM:HandleChatEvent(event, ...)
+function Telecom:HandleChatEvent(event, ...)
 	local filter, message, sender, language, channelString, target, flags, _, _, channelName, _, _, guid, bnetIDAccount = messageEventFilter(event, ...)
 	if filter then
 		return
@@ -141,7 +141,7 @@ function PM:HandleChatEvent(event, ...)
 	end
 	local shouldSuppress = self:ShouldSuppress()
 	local messageType = chatEvents[event]
-	if messageType == "in" and not (PMFrame:IsShown() and thread == self:GetSelectedThread()) then
+	if messageType == "in" and not (TelecomFrame:IsShown() and thread == self:GetSelectedThread()) then
 		-- incoming message whose thread is not currently shown, flag thread as unread
 		thread.unread = true
 		self:UpdateThreadList()
@@ -158,12 +158,12 @@ function PM:HandleChatEvent(event, ...)
 	if messageType == "in" then
 		ChatEdit_SetLastTellTarget(sender, chatType)
 		PlaySoundFile(LSM:Fetch("sound", self.db.sound), "MASTER")
-		-- PlaySoundFile([[Interface\AddOns\PM\Whisper.ogg]], "MASTER")
+		-- PlaySoundFile([[Interface\AddOns\Telecom\Whisper.ogg]], "MASTER")
 		FlashClientIcon()
 	end
 end
 
-function PM:CHAT_MSG_AFK(...)
+function Telecom:CHAT_MSG_AFK(...)
 	local filter, message, sender = messageEventFilter("CHAT_MSG_AFK", ...)
 	if filter then
 		return
@@ -174,7 +174,7 @@ function PM:CHAT_MSG_AFK(...)
 	-- end
 end
 
-function PM:CHAT_MSG_DND(...)
+function Telecom:CHAT_MSG_DND(...)
 	local filter, message, sender = messageEventFilter("CHAT_MSG_DND", ...)
 	if filter then
 		return
@@ -188,7 +188,7 @@ end
 -- local ERR_CHAT_PLAYER_NOT_FOUND_S = "No player named '%s' is currently playing."
 local ERR_CHAT_PLAYER_NOT_FOUND_S = gsub(ERR_CHAT_PLAYER_NOT_FOUND_S, "%.", "%."):format("(.+)")
 
-function PM:CHAT_MSG_SYSTEM(...)
+function Telecom:CHAT_MSG_SYSTEM(...)
 	local filter, message = messageEventFilter("CHAT_MSG_SYSTEM", ...)
 	if filter then
 		return
@@ -221,8 +221,8 @@ local suppress = {
 }
 
 -- this function deterrmines whether chat messages should be sent to the addon or the default chat frame (true for send to chat frame)
-function PM:ShouldSuppress()
-	if PMFrame:IsShown() then
+function Telecom:ShouldSuppress()
+	if TelecomFrame:IsShown() then
 		-- always send to addon if it's already shown
 		return false
 	end
@@ -233,7 +233,7 @@ function PM:ShouldSuppress()
 	end
 end
 
-function PM:SaveMessage(target, chatType, messageType, messageText)
+function Telecom:SaveMessage(target, chatType, messageType, messageText)
 	local thread = self:GetThread(target, chatType)
 	local message = {
 		messageType = messageType,
@@ -243,7 +243,7 @@ function PM:SaveMessage(target, chatType, messageType, messageText)
 		active = true,
 		unread = true,
 	}
-	if (PMFrame:IsShown() or not self:ShouldSuppress()) and (self:GetSelectedThread() == thread or not self.editbox:HasFocus()) then
+	if (TelecomFrame:IsShown() or not self:ShouldSuppress()) and (self:GetSelectedThread() == thread or not self.editbox:HasFocus()) then
 		message.unread = nil
 	end
 	tinsert(thread.messages, message)

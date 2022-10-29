@@ -1,10 +1,10 @@
 ## Interface: 100000
-## Title: PM
+## Title: Telecom
 ## Version: @project-version@
 ## Notes: Managed private conversations.
 ## Author: Lombra
 
-## SavedVariables: PMDB
+## SavedVariables: TelecomDB
 
 Libs\LibStub\LibStub.lua
 Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua

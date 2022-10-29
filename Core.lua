@@ -1,8 +1,8 @@
 local Libra = LibStub("Libra")
 
-local PM = Libra:NewAddon(...)
-_G.PM = PM
-Libra:EmbedWidgets(PM)
+local Telecom = Libra:NewAddon(...)
+_G.Telecom = Telecom
+Libra:EmbedWidgets(Telecom)
 
 local function getPresenceByTag(battleTagQuery)
 	if not battleTagQuery then return end
@@ -88,16 +88,20 @@ local defaults = {
 	},
 }
 
-function PM:OnInitialize()
-	PMDB = copyDefaults(defaults, PMDB)
-	self.db = PMDB
+function Telecom:OnInitialize()
+	if not TelecomDB and PMDB then
+		TelecomDB = PMDB
+	end
+
+	TelecomDB = copyDefaults(defaults, TelecomDB)
+	self.db = TelecomDB
 	
-	PMFrame:SetSize(self.db.width, self.db.height)
-	PMFrame:ClearAllPoints()
-	PMFrame:SetPoint(self.db.point, self.db.x, self.db.y)
-	PMFrame:SetShown(self.db.shown)
+	TelecomFrame:SetSize(self.db.width, self.db.height)
+	TelecomFrame:ClearAllPoints()
+	TelecomFrame:SetPoint(self.db.point, self.db.x, self.db.y)
+	TelecomFrame:SetShown(self.db.shown)
 	
-	PM.threadListInset:SetWidth(self.db.threadListWidth)
+	Telecom.threadListInset:SetWidth(self.db.threadListWidth)
 	
 	local activeThreads = self.db.activeThreads
 	for i = #activeThreads, 1, -1 do
@@ -126,8 +130,8 @@ function PM:OnInitialize()
 	local LSM = LibStub("LibSharedMedia-3.0")
 	if not LSM:IsValid("font", self.db.font) then
 		LSM.RegisterCallback(self, "LibSharedMedia_Registered", function(event, mediaType, key)
-			if key == PM.db.font then
-				PM.chatLog:SetFont(LSM:Fetch("font", key), PM.db.fontSize)
+			if key == Telecom.db.font then
+				Telecom.chatLog:SetFont(LSM:Fetch("font", key), Telecom.db.fontSize)
 				LSM.UnregisterCallback(self, event)
 			end
 		end)
@@ -154,18 +158,18 @@ function PM:OnInitialize()
 	-- self:RegisterEvent("CHAT_MSG_BN_WHISPER_PLAYER_OFFLINE")
 end
 
-function PM:PLAYER_ENTERING_WORLD()
+function Telecom:PLAYER_ENTERING_WORLD()
 	self:CleanArchive()
 	
 	-- need to insert into UISpecialFrames after PLAYER_LOGIN as all special frames gets hidden at that point
-	tinsert(UISpecialFrames, "PMFrame")
+	tinsert(UISpecialFrames, "TelecomFrame")
 	if self.db.shown then
-		PM:SelectThread(self.db.selectedTarget, self.db.selectedType)
+		Telecom:SelectThread(self.db.selectedTarget, self.db.selectedType)
 	end
 	self:UnregisterEvent("PLAYER_ENTERING_WORLD")
 end
 
-function PM:PLAYER_LOGOUT()
+function Telecom:PLAYER_LOGOUT()
 	local activeThreads = self.db.activeThreads
 	if self.db.closeThreadsOnLogout then
 		for i = #activeThreads, 1, -1 do
@@ -176,33 +180,33 @@ function PM:PLAYER_LOGOUT()
 	self:CleanArchive()
 end
 
-function PM:GetFriendInfo(name)
+function Telecom:GetFriendInfo(name)
 	local friendInfo = C_FriendList.GetFriendInfo(name)
 	if friendInfo then
 		return true, friendInfo.connected, friendInfo.afk, friendInfo.dnd, friendInfo.level, friendInfo.className, friendInfo.area
 	end
 end
 
-function PM:FRIENDLIST_UPDATE()
+function Telecom:FRIENDLIST_UPDATE()
 	if self:GetSelectedThread() then
 		self:UpdateInfo()
 	end
 	self:UpdateThreads()
 end
 
-function PM:BN_FRIEND_LIST_SIZE_CHANGED()
+function Telecom:BN_FRIEND_LIST_SIZE_CHANGED()
 	self:UpdatePresences()
 	self:UpdateSelection()
 end
 
-function PM:PLAYER_FLAGS_CHANGED(unit)
+function Telecom:PLAYER_FLAGS_CHANGED(unit)
 	if self:GetSelectedThread() and (self:GetFullCharacterName(UnitName(unit)) == self:GetSelectedThread().target) then
 		self:UpdateInfo()
 	end
 	-- self:UpdateThreads()
 end
 
-function PM:BN_FRIEND_INFO_CHANGED(index)
+function Telecom:BN_FRIEND_INFO_CHANGED(index)
 	if index and self:GetSelectedThread() and (C_BattleNet.GetFriendAccountInfo(index).bnetAccountID == self:GetSelectedThread().targetID) then
 		self:UpdateInfo()
 	end
@@ -210,33 +214,33 @@ function PM:BN_FRIEND_INFO_CHANGED(index)
 	self:UpdateThreads()
 end
 
-function PM:BN_CONNECTED(...)
+function Telecom:BN_CONNECTED(...)
 	-- presence IDs will have changed once Battle.net connection is reestablished
 	self:UpdatePresences()
 	self:UpdateSelection()
 end
 
-function PM:BN_DISCONNECTED(...)
+function Telecom:BN_DISCONNECTED(...)
 	-- print("BN_DISCONNECTED", ...)
 end
 
-function PM:BN_SELF_ONLINE(...)
+function Telecom:BN_SELF_ONLINE(...)
 	-- print("BN_SELF_ONLINE", ...)
 	-- self:UpdatePresences()
 end
 
-function PM:BN_SELF_OFFLINE(...)
+function Telecom:BN_SELF_OFFLINE(...)
 	-- print("BN_SELF_OFFLINE", ...)
 end
 
-function PM:BN_FRIEND_ACCOUNT_ONLINE(bnetIDAccount)
+function Telecom:BN_FRIEND_ACCOUNT_ONLINE(bnetIDAccount)
 	local thread = self:GetThread(select(2, BNGetFriendInfoByID(bnetIDAccount)), "BN_WHISPER", true)
 	if thread then
 		self:SaveMessage(thread, nil, "%s has come online.")
 	end
 end
 
-function PM:BN_FRIEND_ACCOUNT_OFFLINE(bnetIDAccount)
+function Telecom:BN_FRIEND_ACCOUNT_OFFLINE(bnetIDAccount)
 	if not BNConnected() then return end
 	local thread = self:GetThread(select(2, BNGetFriendInfoByID(bnetIDAccount)), "BN_WHISPER", true)
 	if thread then
@@ -244,17 +248,17 @@ function PM:BN_FRIEND_ACCOUNT_OFFLINE(bnetIDAccount)
 	end
 end
 
-function PM:BN_TOON_NAME_UPDATED(id, toonName, dunno)
+function Telecom:BN_TOON_NAME_UPDATED(id, toonName, dunno)
 end
 
-function PM:CHAT_MSG_BN_WHISPER_PLAYER_OFFLINE(message, sender, language, channelString, target, flags, _, _, channelName, _, _, guid, bnetIDAccount)
+function Telecom:CHAT_MSG_BN_WHISPER_PLAYER_OFFLINE(message, sender, language, channelString, target, flags, _, _, channelName, _, _, guid, bnetIDAccount)
 	local thread = self:GetThread(sender, "BN_WHISPER", true)
 	if thread then
 		self:SaveMessage(sender, "BN_WHISPER", nil, message)
 	end
 end
 
-function PM:UpdatePresences()
+function Telecom:UpdatePresences()
 	for i, thread in ipairs(self.db.activeThreads) do
 		if thread.type == "BN_WHISPER" then
 			thread.target, thread.targetID = getPresenceByTag(thread.battleTag)
@@ -277,17 +281,17 @@ function PM:UpdatePresences()
 	if lastTold then ChatEdit_SetLastToldTarget(lastTold, self.db.lastToldType) end
 end
 
-function PM:UpdateSelection()
+function Telecom:UpdateSelection()
 	if self.db.selectedType == "BN_WHISPER" then
 		local selectedTarget = getPresenceByTag(self.db.selectedBattleTag)
 		self.db.selectedTarget = selectedTarget
 		if selectedTarget and self.db.shown then
-			PM:SelectThread(selectedTarget, self.db.selectedType)
+			Telecom:SelectThread(selectedTarget, self.db.selectedType)
 		end
 	end
 end
 
-function PM:CleanArchive()
+function Telecom:CleanArchive()
 	local now = time()
 	local threads = self.db.threads
 	for i = #threads, 1, -1 do
@@ -309,7 +313,7 @@ function PM:CleanArchive()
 	end
 end
 
-function PM:GetThread(target, chatType)
+function Telecom:GetThread(target, chatType)
 	for i, thread in ipairs(self.db.threads) do
 		if thread.target == target and thread.type == chatType then
 			return thread
@@ -317,7 +321,7 @@ function PM:GetThread(target, chatType)
 	end
 end
 
-function PM:CreateThread(target, chatType, isGM)
+function Telecom:CreateThread(target, chatType, isGM)
 	local thread = {
 		target = target,
 		type = chatType,
@@ -334,7 +338,7 @@ function PM:CreateThread(target, chatType, isGM)
 	return thread
 end
 
-function PM:DeleteThread(target, chatType)
+function Telecom:DeleteThread(target, chatType)
 	for i, thread in ipairs(self.db.threads) do
 		if thread.target == target and thread.type == chatType then
 			tremove(self.db.threads, i)
@@ -343,7 +347,7 @@ function PM:DeleteThread(target, chatType)
 	end
 end
 
-function PM:IsThreadActive(target, chatType)
+function Telecom:IsThreadActive(target, chatType)
 	for i, thread in ipairs(self.db.activeThreads) do
 		if thread.target == target and thread.type == chatType then
 			return true
@@ -351,7 +355,7 @@ function PM:IsThreadActive(target, chatType)
 	end
 end
 
-function PM:ActivateThread(target, chatType)
+function Telecom:ActivateThread(target, chatType)
 	if chatType == "WHISPER" and not target:match("%-") then
 		target = gsub(strlower(target), ".", strupper, 1).."-"..gsub(GetRealmName(), " ", "")
 	end
@@ -368,7 +372,7 @@ function PM:ActivateThread(target, chatType)
 	return thread
 end
 
-function PM:CloseThread(target, chatType)
+function Telecom:CloseThread(target, chatType)
 	local activeThreads = self.db.activeThreads
 	for i, thread in ipairs(activeThreads) do
 		if thread.target == target and thread.type == chatType then
@@ -379,7 +383,7 @@ function PM:CloseThread(target, chatType)
 			tremove(activeThreads, i)
 			thread = self:GetThread(target, chatType)
 			if #activeThreads == 0 then
-				PMFrame:Hide()
+				TelecomFrame:Hide()
 				self.selectedThread = nil
 			elseif thread == self:GetSelectedThread() then
 				local thread = activeThreads[i] or activeThreads[i - 1]
@@ -410,11 +414,11 @@ function PM:CloseThread(target, chatType)
 	end
 end
 
-function PM:GetSelectedThread()
+function Telecom:GetSelectedThread()
 	return self.selectedThread
 end
 
-function PM:GetBattleTag(accountName)
+function Telecom:GetBattleTag(accountName)
 	local bnetIDAccount = BNet_GetBNetIDAccount(accountName)
 	if bnetIDAccount then
 		local accountInfo = C_BattleNet.GetAccountInfoByID(bnetIDAccount)
@@ -422,14 +426,14 @@ function PM:GetBattleTag(accountName)
 	end
 end
 
-function PM:GetFullCharacterName(name)
+function Telecom:GetFullCharacterName(name)
 	if not name:match("%-") then
 		name = name.."-"..gsub(GetRealmName(), " ", "")
 	end
 	return name
 end
 
-function PM:GetDateStamp(timestamp)
+function Telecom:GetDateStamp(timestamp)
 	local text
 	local currentTime = date("*t", time())
 	if (currentTime.yday == timestamp.yday and currentTime.year == timestamp.year) then

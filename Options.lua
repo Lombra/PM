@@ -1,4 +1,4 @@
-local _, PM = ...
+local _, Telecom = ...
 local LSM = LibStub("LibSharedMedia-3.0")
 
 
@@ -9,7 +9,7 @@ for i, font in ipairs(LSM:List("font")) do
 	LSM_FontObjects[font]:SetFont(LSM:Fetch("font", font), 10, "")
 end
 
-local frame = PM:CreateOptionsFrame("PM")
+local frame = Telecom:CreateOptionsFrame("Telecom")
 
 LSM.RegisterCallback(frame, "LibSharedMedia_Registered", function(event, mediaType, key)
 	if mediaType ~= "font" then return end
@@ -19,11 +19,11 @@ end)
 
 LSM:Register("sound", "TellMessage", [[Sound\Interface\iTellMessage.ogg]])
 
-SlashCmdList["PM"] = function(msg)
+SlashCmdList["Telecom"] = function(msg)
 	InterfaceOptionsFrame_OpenToCategory(frame)
 	InterfaceOptionsFrame_OpenToCategory(frame)
 end
-SLASH_PM1 = "/pm"
+SLASH_TELECOM1 = "/telecom"
 
 local optionsAppearance = frame:AddSubCategory("Appearance", true)
 optionsAppearance:CreateOptions({
@@ -33,7 +33,7 @@ optionsAppearance:CreateOptions({
 		tooltip = "Sets the font used by the chat log.",
 		key = "font",
 		func = function(self, font)
-			PM.chatLog:SetFont(LSM:Fetch("font", font), PM.db.fontSize, "")
+			Telecom.chatLog:SetFont(LSM:Fetch("font", font), Telecom.db.fontSize, "")
 		end,
 		menuList = function(self)
 			return LSM:List("font")
@@ -48,7 +48,7 @@ optionsAppearance:CreateOptions({
 		tooltip = "Sets the font size of the chat log.",
 		key = "fontSize",
 		func = function(self, value)
-			PM.chatLog:SetFont(LSM:Fetch("font", PM.db.font), value, "")
+			Telecom.chatLog:SetFont(LSM:Fetch("font", Telecom.db.font), value, "")
 		end,
 		min = 8,
 		max = 32,
@@ -96,7 +96,7 @@ optionsAppearance:CreateOptions({
 		tooltip = "Sets the width of the main frame.",
 		key = "width",
 		func = function(self, value)
-			PMFrame:SetWidth(value)
+			TelecomFrame:SetWidth(value)
 		end,
 		min = 256,
 		max = 1024,
@@ -108,9 +108,9 @@ optionsAppearance:CreateOptions({
 		tooltip = "Sets the height of the main frame.",
 		key = "height",
 		func = function(self, value)
-			PMFrame:SetHeight(value)
-			PM:CreateScrollButtons()
-			PM:UpdateThreadList()
+			TelecomFrame:SetHeight(value)
+			Telecom:CreateScrollButtons()
+			Telecom:UpdateThreadList()
 		end,
 		min = 160,
 		max = 1024,
@@ -122,9 +122,9 @@ optionsAppearance:CreateOptions({
 		tooltip = "Sets the width of the thread list.",
 		key = "threadListWidth",
 		func = function(self, value)
-			PM.threadListInset:SetWidth(value)
-			PM.threadListInset:GetWidth()
-			PM:CreateScrollButtons()
+			Telecom.threadListInset:SetWidth(value)
+			Telecom.threadListInset:GetWidth()
+			Telecom:CreateScrollButtons()
 		end,
 		min = 64,
 		max = 256,
@@ -153,7 +153,7 @@ optionsBehaviour:CreateOptions({
 		key = "editboxTextPerThread",
 		func = function(self, value)
 			if not value then
-				for i, thread in ipairs(PM.db.threads) do
+				for i, thread in ipairs(Telecom.db.threads) do
 					thread.editboxText = nil
 				end
 			end
@@ -164,10 +164,10 @@ optionsBehaviour:CreateOptions({
 		text = "Suppress chat frame during:",
 		tooltip = "Select conditions for which to prevent addon from appearing when receiving a message.",
 		set = function(self, arg, checked)
-			PM.db.suppress[arg] = checked
+			Telecom.db.suppress[arg] = checked
 		end,
 		get = function(self, arg)
-			return PM.db.suppress[arg]
+			return Telecom.db.suppress[arg]
 		end,
 		multiSelect = true,
 		properties = {
@@ -207,20 +207,20 @@ frame:AddSubCategory("Archive", true):CreateOptions({
 		tooltip = "If enabled, archived Battle.net messages will be automatically deleted.",
 		-- key = "autoDeleteArchiveBNet",
 		set = function(self, value)
-			PM.db.autoCleanArchive.BN_WHISPER = value
+			Telecom.db.autoCleanArchive.BN_WHISPER = value
 		end,
 		get = function(self)
-			return PM.db.autoCleanArchive.BN_WHISPER
+			return Telecom.db.autoCleanArchive.BN_WHISPER
 		end,
 	},
 	{
 		type = "Dropdown",
 		text = "Delete Battle.net messages after:",
 		tooltip = "Specifies for how long Battle.net messages will remain archived.",
-		set = function(self, time) PM.db.archiveKeep.BN_WHISPER = time end,
-		get = function() return PM.db.archiveKeep.BN_WHISPER end,
+		set = function(self, time) Telecom.db.archiveKeep.BN_WHISPER = time end,
+		get = function() return Telecom.db.archiveKeep.BN_WHISPER end,
 		-- func = function(self, value) self:SetText((value == 0) and "Immediately" or SecondsToTime(value)) end,
-		disabled = function() return not PM.db.autoCleanArchive.BN_WHISPER end,
+		disabled = function() return not Telecom.db.autoCleanArchive.BN_WHISPER end,
 		menuList = (function()
 			local DAY = 24 * 3600
 			local t = {}
@@ -241,20 +241,20 @@ frame:AddSubCategory("Archive", true):CreateOptions({
 		tooltip = "If enabled, archived WoW messages will be automatically deleted.",
 		-- key = "autoDeleteArchiveWoW",
 		set = function(self, value)
-			PM.db.autoCleanArchive.WHISPER = value
+			Telecom.db.autoCleanArchive.WHISPER = value
 		end,
 		get = function(self)
-			return PM.db.autoCleanArchive.WHISPER
+			return Telecom.db.autoCleanArchive.WHISPER
 		end,
 	},
 	{
 		type = "Dropdown",
 		text = "Delete WoW messages after:",
 		tooltip = "Specifies for how long WoW messages will remain archived.",
-		set = function(self, time) PM.db.archiveKeep.WHISPER = time end,
-		get = function() return PM.db.archiveKeep.WHISPER end,
+		set = function(self, time) Telecom.db.archiveKeep.WHISPER = time end,
+		get = function() return Telecom.db.archiveKeep.WHISPER end,
 		-- func = function(self, value) self:SetText((value == 0) and "Immediately" or SecondsToTime(value)) end,
-		disabled = function() return not PM.db.autoCleanArchive.WHISPER end,
+		disabled = function() return not Telecom.db.autoCleanArchive.WHISPER end,
 		menuList = (function()
 			local DAY = 24 * 3600
 			local t = {}
@@ -277,7 +277,7 @@ frame:AddSubCategory("Formatting", true):CreateOptions({
 		text = "Include timestamps",
 		key = "timestamps",
 		func = function(self)
-			PM:RefreshThread(PM:GetSelectedThread())
+			Telecom:RefreshThread(Telecom:GetSelectedThread())
 		end,
 	},
 	{
@@ -286,9 +286,9 @@ frame:AddSubCategory("Formatting", true):CreateOptions({
 		-- tooltip = "Sets the font used by the chat log.",
 		key = "timestampFormat",
 		func = function(self)
-			PM:RefreshThread(PM:GetSelectedThread())
+			Telecom:RefreshThread(Telecom:GetSelectedThread())
 		end,
-		disabled = function() return not PM.db.timestamps end,
+		disabled = function() return not Telecom.db.timestamps end,
 		menuList = {
 			-- "",
 			TIMESTAMP_FORMAT_HHMM,
@@ -306,14 +306,14 @@ frame:AddSubCategory("Formatting", true):CreateOptions({
 		type = "CheckButton",
 		text = "Indent",
 		key = "indentWrap",
-		func = function(self, value) PM.chatLog:SetIndentedWordWrap(value) end,
+		func = function(self, value) Telecom.chatLog:SetIndentedWordWrap(value) end,
 	},
 	{
 		type = "CheckButton",
 		text = "Use class colors",
 		tooltip = "Color incoming messages' sender by their class.",
 		key = "classColors",
-		func = function(self, value) PM:RefreshThread(PM:GetSelectedThread()) end,
+		func = function(self, value) Telecom:RefreshThread(Telecom:GetSelectedThread()) end,
 	},
 	{
 		newColumn = true,
@@ -321,13 +321,13 @@ frame:AddSubCategory("Formatting", true):CreateOptions({
 		text = "Use separate color for outgoing whispers",
 		-- tooltip = "If enabled, will use default color for Battle.net whispers.",
 		-- key = "threadListBNetFriends",
-		set = function(self, value) PM.db.separateOutgoingColor = value end,
-		get = function(self) return PM.db.separateOutgoingColor end,
+		set = function(self, value) Telecom.db.separateOutgoingColor = value end,
+		get = function(self) return Telecom.db.separateOutgoingColor end,
 		func = function(self, value)
-			local info = PM.db.useDefaultColor.BN_WHISPER and ChatTypeInfo["BN_WHISPER"] or PM.db.color.BN_WHISPER
-			PM:UpdateChatColor("BN_WHISPER", info.r, info.g, info.b)
-			local info = PM.db.useDefaultColor.WHISPER and ChatTypeInfo["WHISPER"] or PM.db.color.WHISPER
-			PM:UpdateChatColor("WHISPER", info.r, info.g, info.b)
+			local info = Telecom.db.useDefaultColor.BN_WHISPER and ChatTypeInfo["BN_WHISPER"] or Telecom.db.color.BN_WHISPER
+			Telecom:UpdateChatColor("BN_WHISPER", info.r, info.g, info.b)
+			local info = Telecom.db.useDefaultColor.WHISPER and ChatTypeInfo["WHISPER"] or Telecom.db.color.WHISPER
+			Telecom:UpdateChatColor("WHISPER", info.r, info.g, info.b)
 		end,
 	},
 	{
@@ -335,11 +335,11 @@ frame:AddSubCategory("Formatting", true):CreateOptions({
 		text = "Use default color for Battle.net whispers",
 		tooltip = "If enabled, will use default color for Battle.net whispers.",
 		-- key = "threadListBNetFriends",
-		set = function(self, value) PM.db.useDefaultColor.BN_WHISPER = value end,
-		get = function(self) return PM.db.useDefaultColor.BN_WHISPER end,
+		set = function(self, value) Telecom.db.useDefaultColor.BN_WHISPER = value end,
+		get = function(self) return Telecom.db.useDefaultColor.BN_WHISPER end,
 		func = function(self, value)
-			local info = value and ChatTypeInfo["BN_WHISPER"] or PM.db.color.BN_WHISPER
-			PM:UpdateChatColor("BN_WHISPER", info.r, info.g, info.b)
+			local info = value and ChatTypeInfo["BN_WHISPER"] or Telecom.db.color.BN_WHISPER
+			Telecom:UpdateChatColor("BN_WHISPER", info.r, info.g, info.b)
 		end,
 	},
 	{
@@ -347,39 +347,39 @@ frame:AddSubCategory("Formatting", true):CreateOptions({
 		text = "Battle.net whisper color",
 		tooltip = "Sets the color used for Battle.net whisper messages.",
 		-- key = "threadListBNetFriends",
-		set = function(self, value) PM.db.color.BN_WHISPER = value end,
-		get = function(self) return PM.db.color.BN_WHISPER end,
+		set = function(self, value) Telecom.db.color.BN_WHISPER = value end,
+		get = function(self) return Telecom.db.color.BN_WHISPER end,
 		func = function(self, value)
-			if not PM.db.useDefaultColor.BN_WHISPER then
-				PM:UpdateChatColor("BN_WHISPER", value.r, value.g, value.b)
+			if not Telecom.db.useDefaultColor.BN_WHISPER then
+				Telecom:UpdateChatColor("BN_WHISPER", value.r, value.g, value.b)
 			end
 		end,
-		disabled = function() return PM.db.useDefaultColor.BN_WHISPER end,
+		disabled = function() return Telecom.db.useDefaultColor.BN_WHISPER end,
 	},
 	{
 		type = "ColorButton",
 		text = "Battle.net outgoing whisper color",
 		tooltip = "Sets the color used for outgoing Battle.net whisper messages.",
 		-- key = "threadListBNetFriends",
-		set = function(self, value) PM.db.color.BN_WHISPER_INFORM = value end,
-		get = function(self) return PM.db.color.BN_WHISPER_INFORM end,
+		set = function(self, value) Telecom.db.color.BN_WHISPER_INFORM = value end,
+		get = function(self) return Telecom.db.color.BN_WHISPER_INFORM end,
 		func = function(self, value)
-			if not PM.db.useDefaultColor.BN_WHISPER then
-				PM:UpdateChatColor("BN_WHISPER", value.r, value.g, value.b)
+			if not Telecom.db.useDefaultColor.BN_WHISPER then
+				Telecom:UpdateChatColor("BN_WHISPER", value.r, value.g, value.b)
 			end
 		end,
-		disabled = function() return PM.db.useDefaultColor.BN_WHISPER or not PM.db.separateOutgoingColor end,
+		disabled = function() return Telecom.db.useDefaultColor.BN_WHISPER or not Telecom.db.separateOutgoingColor end,
 	},
 	{
 		type = "CheckButton",
 		text = "Use default color for WoW whispers",
 		tooltip = "If enabled, will use default color for WoW whispers.",
 		-- key = "threadListBNetFriends",
-		set = function(self, value) PM.db.useDefaultColor.WHISPER = value end,
-		get = function(self) return PM.db.useDefaultColor.WHISPER end,
+		set = function(self, value) Telecom.db.useDefaultColor.WHISPER = value end,
+		get = function(self) return Telecom.db.useDefaultColor.WHISPER end,
 		func = function(self, value)
-			local info = value and ChatTypeInfo["WHISPER"] or PM.db.color.WHISPER
-			PM:UpdateChatColor("WHISPER", info.r, info.g, info.b)
+			local info = value and ChatTypeInfo["WHISPER"] or Telecom.db.color.WHISPER
+			Telecom:UpdateChatColor("WHISPER", info.r, info.g, info.b)
 		end,
 	},
 	{
@@ -387,32 +387,32 @@ frame:AddSubCategory("Formatting", true):CreateOptions({
 		text = "WoW whisper color",
 		tooltip = "Sets the color used for WoW whisper messages.",
 		-- key = "threadListBNetFriends",
-		set = function(self, value) PM.db.color.WHISPER = value end,
-		get = function(self) return PM.db.color.WHISPER end,
+		set = function(self, value) Telecom.db.color.WHISPER = value end,
+		get = function(self) return Telecom.db.color.WHISPER end,
 		func = function(self, value)
-			if not PM.db.useDefaultColor.WHISPER then
-				PM:UpdateChatColor("WHISPER", value.r, value.g, value.b)
+			if not Telecom.db.useDefaultColor.WHISPER then
+				Telecom:UpdateChatColor("WHISPER", value.r, value.g, value.b)
 			end
 		end,
-		disabled = function() return PM.db.useDefaultColor.WHISPER end,
+		disabled = function() return Telecom.db.useDefaultColor.WHISPER end,
 	},
 	{
 		type = "ColorButton",
 		text = "WoW outgoing whisper color",
 		tooltip = "Sets the color used for outgoing WoW whisper messages.",
 		-- key = "threadListBNetFriends",
-		set = function(self, value) PM.db.color.WHISPER_INFORM = value end,
-		get = function(self) return PM.db.color.WHISPER_INFORM end,
+		set = function(self, value) Telecom.db.color.WHISPER_INFORM = value end,
+		get = function(self) return Telecom.db.color.WHISPER_INFORM end,
 		func = function(self, value)
-			if not PM.db.useDefaultColor.WHISPER then
-				PM:UpdateChatColor("WHISPER", value.r, value.g, value.b)
+			if not Telecom.db.useDefaultColor.WHISPER then
+				Telecom:UpdateChatColor("WHISPER", value.r, value.g, value.b)
 			end
 		end,
-		disabled = function() return PM.db.useDefaultColor.WHISPER or not PM.db.separateOutgoingColor end,
+		disabled = function() return Telecom.db.useDefaultColor.WHISPER or not Telecom.db.separateOutgoingColor end,
 	},
 })
 
-function PM:LoadSettings()
+function Telecom:LoadSettings()
 	frame:SetDatabase(self.db)
 	frame:SetHandler(self)
 	frame:SetupControls()

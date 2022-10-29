@@ -1,4 +1,4 @@
-local addonName, PM = ...
+local addonName, Telecom = ...
 
 
 local playerFactionGroup = UnitFactionGroup("player")
@@ -10,7 +10,7 @@ for k,v in pairs(LOCALIZED_CLASS_NAMES_FEMALE) do reverseclassnames[v] = k end
 local threadListItems = {}
 
 local frameStructure = {
-	name = "PMFrame",
+	name = "TelecomFrame",
 	inherits = "BasicFrameTemplate",
 	toplevel = true,
 	enableMouse = true,
@@ -21,23 +21,23 @@ local frameStructure = {
 		OnDragStart = "StartMoving",
 		OnDragStop = function(self)
 			self:StopMovingOrSizing()
-			PM.db.point, PM.db.x, PM.db.y = select(3, self:GetPoint())
+			Telecom.db.point, Telecom.db.x, Telecom.db.y = select(3, self:GetPoint())
 		end,
 		OnShow = function(self)
-			PM:GetSelectedThread().unread = nil
-			PM:UpdateThreadList()
-			PM.db.shown = true
+			Telecom:GetSelectedThread().unread = nil
+			Telecom:UpdateThreadList()
+			Telecom.db.shown = true
 		end,
 		OnHide = function(self)
 			self:StopMovingOrSizing()
-			PM.db.point, PM.db.x, PM.db.y = select(3, self:GetPoint())
-			PM.db.shown = nil
+			Telecom.db.point, Telecom.db.x, Telecom.db.y = select(3, self:GetPoint())
+			Telecom.db.shown = nil
 		end,
 	}
 }
 
-local frame = PM:CreateFrame("Frame", UIParent, frameStructure)
-frame.TitleText:SetText("PM")
+local frame = Telecom:CreateFrame("Frame", UIParent, frameStructure)
+frame.TitleText:SetText("Telecom")
 frame:RegisterForDrag("LeftButton")
 
 
@@ -45,7 +45,7 @@ local insetLeft = CreateFrame("Frame", nil, frame, "InsetFrameTemplate")
 insetLeft:SetPoint("TOPLEFT", PANEL_INSET_LEFT_OFFSET, PANEL_INSET_TOP_OFFSET)
 insetLeft:SetPoint("BOTTOM", 0, PANEL_INSET_BOTTOM_OFFSET + 2)
 insetLeft.Bg:SetDrawLayer("BACKGROUND", 1)
-PM.threadListInset = insetLeft
+Telecom.threadListInset = insetLeft
 
 
 local function createScrollButton(listFrame)
@@ -98,14 +98,14 @@ t:SetTexture(0.5, 0.5, 0.5)
 
 local function onClick(self)
 	local target, type = self.target, self.type
-	if not PM:IsThreadActive(target, type) then
-		PM:CreateThread(target, type)
+	if not Telecom:IsThreadActive(target, type) then
+		Telecom:CreateThread(target, type)
 	end
-	PM:SelectThread(target, type)
+	Telecom:SelectThread(target, type)
 end
 
 local function onEnter(self)
-	if PM:IsThreadActive(self.target, self.type) then
+	if Telecom:IsThreadActive(self.target, self.type) then
 		self.close:Show()
 		self.icon:Hide()
 		self.flash:Stop()
@@ -114,9 +114,9 @@ local function onEnter(self)
 end
 
 local function onLeave(self)
-	if PM:IsThreadActive(self.target, self.type) and GetMouseFocus() ~= self.close then
+	if Telecom:IsThreadActive(self.target, self.type) and GetMouseFocus() ~= self.close then
 		self.close:Hide()
-		local thread = PM:GetThread(self.target, self.type)
+		local thread = Telecom:GetThread(self.target, self.type)
 		if not self.selected then
 			self:UnlockHighlight()
 			if thread.unread then
@@ -143,7 +143,7 @@ local closeScripts = {
 		end
 	end,
 	OnClick = function(self)
-		PM:CloseThread(self.parent.target, self.parent.type)
+		Telecom:CloseThread(self.parent.target, self.parent.type)
 	end,
 	OnMouseDown = function(self)
 		self.texture:SetPoint("CENTER", 1, -1)
@@ -169,8 +169,8 @@ local function setButtonStatus(button, showStatus, isOnline, isAFK, isDND)
 	end
 end
 
-local scrollFrame = PM:CreateScrollFrame("Hybrid", insetLeft)
-PM.scroll = scrollFrame
+local scrollFrame = Telecom:CreateScrollFrame("Hybrid", insetLeft)
+Telecom.scroll = scrollFrame
 local separator = scrollFrame.scrollChild:CreateTexture()
 separator:SetTexture([[Interface\FriendsFrame\UI-FriendsFrame-OnlineDivider]])
 separator:SetTexCoord(0, 1, 3/16, 0.75)
@@ -210,9 +210,9 @@ scrollFrame.updateButton = function(button, index)
 	
 	button:ResetHeight()
 	
-	local thread = PM:GetThread(object.target, object.type)
+	local thread = Telecom:GetThread(object.target, object.type)
 	
-	local selectedThread = PM:GetSelectedThread()
+	local selectedThread = Telecom:GetSelectedThread()
 	if selectedThread and thread == selectedThread then
 		button:LockHighlight()
 		button.selected = true
@@ -221,7 +221,7 @@ scrollFrame.updateButton = function(button, index)
 		button.selected = nil
 	end
 	
-	if PM:IsThreadActive(object.target, object.type) then
+	if Telecom:IsThreadActive(object.target, object.type) then
 		if (thread.unread and thread ~= selectedThread) and not (button:IsMouseOver() or button.close:IsMouseOver()) then
 			if not button.flash:IsPlaying() then
 				button.flash:Play()
@@ -235,7 +235,7 @@ scrollFrame.updateButton = function(button, index)
 	
 	if object.type == "WHISPER" then
 		local name = Ambiguate(object.target, "none")
-		local isFriend, connected, isAFK, isDND = PM:GetFriendInfo(name)
+		local isFriend, connected, isAFK, isDND = Telecom:GetFriendInfo(name)
 		button.text:SetText(name)
 		button.icon:Hide()
 		setButtonStatus(button, isFriend, connected, isAFK, isDND)
@@ -261,7 +261,7 @@ scrollFrame.updateButton = function(button, index)
 	button.target = object.target
 	button.type = object.type
 	if GetMouseFocus() == button then
-		if PM:IsThreadActive(object.target, object.type) then
+		if Telecom:IsThreadActive(object.target, object.type) then
 			button.icon:Hide()
 			button.text:SetPoint("RIGHT", button.icon, "LEFT", -2, 0)
 		end
@@ -280,13 +280,13 @@ scrollFrame.createButton = function(parent)
 	button.shadow = button:CreateTexture(nil, "BACKGROUND")
 	button.shadow:SetSize(16, 16)
 	button.shadow:SetPoint("LEFT")
-	button.shadow:SetTexture([[Interface\AddOns\PM\StatusBackground]])
+	button.shadow:SetTexture([[Interface\AddOns\Telecom\StatusBackground]])
 	button.shadow:SetBlendMode("MOD")
 	
 	button.status = button:CreateTexture()
 	button.status:SetSize(16, 16)
 	button.status:SetPoint("LEFT")
-	button.status:SetTexture([[Interface\AddOns\PM\Status]])
+	button.status:SetTexture([[Interface\AddOns\Telecom\Status]])
 	
 	button.text = button:CreateFontString(nil, nil, "GameFontHighlightSmall")
 	button.text:SetPoint("LEFT", button.status, "RIGHT")
@@ -376,7 +376,7 @@ infoPanel:SetPoint("TOPRIGHT", PANEL_INSET_RIGHT_OFFSET, PANEL_INSET_TOP_OFFSET)
 infoPanel:SetHeight(32)
 infoPanel:EnableMouse(true)
 infoPanel:SetScript("OnEnter", function(self)
-	local thread = PM:GetSelectedThread()
+	local thread = Telecom:GetSelectedThread()
 	
 	if thread.type ~= "BN_WHISPER" then return end
 	
@@ -446,7 +446,7 @@ local function viewFriends(self, target)
 end
 
 local function openArchive(self, target, chatType)
-	PM:SelectArchive(target, chatType)
+	Telecom:SelectArchive(target, chatType)
 end
 
 local menuButton = CreateFrame("Button", nil, infoPanel)
@@ -457,10 +457,10 @@ menuButton:SetHighlightTexture([[Interface\Buttons\UI-Common-MouseHilight]])
 menuButton:SetSize(32, 32)
 menuButton:SetPoint("RIGHT")
 menuButton:SetScript("OnClick", function(self)
-	self.menu:Toggle(PM:GetSelectedThread())
+	self.menu:Toggle(Telecom:GetSelectedThread())
 end)
 
-menuButton.menu = PM:CreateDropdown("Menu")
+menuButton.menu = Telecom:CreateDropdown("Menu")
 menuButton.menu.relativeTo = menuButton
 menuButton.menu.initialize = function(self, level)
 	if level == 1 then
@@ -658,7 +658,7 @@ local function splitMessage(message)
 end
 
 local editbox = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
-PM.editbox = editbox
+Telecom.editbox = editbox
 editbox:SetHeight(20)
 editbox:SetPoint("LEFT", insetLeft, "RIGHT", 9, 0)
 editbox:SetPoint("BOTTOMRIGHT", -6, 5)
@@ -705,20 +705,20 @@ editbox:SetScript("OnEnterPressed", function(self)
 		end
 	end
 	self:SetText("")
-	PM:GetSelectedThread().editboxText = nil
-	if PM.db.clearEditboxFocusOnSend then
+	Telecom:GetSelectedThread().editboxText = nil
+	if Telecom.db.clearEditboxFocusOnSend then
 		self:ClearFocus()
 	end
 end)
 editbox:SetScript("OnEscapePressed", editbox.ClearFocus)
 editbox:SetScript("OnTabPressed", function(self)
 	-- local nextTell, nextTellType = ChatEdit_GetNextTellTarget(self:GetAttribute("tellTarget"), self:GetAttribute("chatType"))
-	-- PM:SelectThread(nextTell, nextTellType)
-	for i, thread in ipairs(PM.db.activeThreads) do
+	-- Telecom:SelectThread(nextTell, nextTellType)
+	for i, thread in ipairs(Telecom.db.activeThreads) do
 		if thread.target == self:GetAttribute("tellTarget") and thread.type == self:GetAttribute("chatType") then
 			if IsShiftKeyDown() then i = i - 2 end
-			local nextThread = PM.db.activeThreads[i % #PM.db.activeThreads + 1]
-			PM:SelectThread(nextThread.target, nextThread.type)
+			local nextThread = Telecom.db.activeThreads[i % #Telecom.db.activeThreads + 1]
+			Telecom:SelectThread(nextThread.target, nextThread.type)
 			break
 		end
 	end
@@ -729,19 +729,19 @@ editbox:SetScript("OnEditFocusGained", function(self)
 end)
 editbox:SetScript("OnEditFocusLost", function(self)
 	ACTIVE_CHAT_EDIT_BOX = nil
-	if PM.db.clearEditboxOnFocusLost then
+	if Telecom.db.clearEditboxOnFocusLost then
 		self:SetText("")
-		PM:GetSelectedThread().editboxText = nil
+		Telecom:GetSelectedThread().editboxText = nil
 	end
 end)
 editbox:SetScript("OnTextChanged", function(self, isUserInput)
-	if isUserInput and PM.db.editboxTextPerThread then
-		PM:GetSelectedThread().editboxText = self:GetText()
+	if isUserInput and Telecom.db.editboxTextPerThread then
+		Telecom:GetSelectedThread().editboxText = self:GetText()
 	end
 end)
 editbox:SetScript("OnUpdate", function(self)
 	if self.setText then
-		self:SetText(PM:GetSelectedThread().editboxText or "")
+		self:SetText(Telecom:GetSelectedThread().editboxText or "")
 		self.setText = nil
 	end
 end)
@@ -753,7 +753,7 @@ chatLogInset:SetPoint("RIGHT", PANEL_INSET_RIGHT_OFFSET, 0)
 chatLogInset:SetPoint("LEFT", insetLeft, "RIGHT", PANEL_INSET_LEFT_OFFSET, 0)
 chatLogInset:SetPoint("BOTTOM", editbox, "TOP", 0, 4)
 chatLogInset.Bg:SetDrawLayer("BACKGROUND", 1)
-PM.chatlogInset = chatLogInset
+Telecom.chatlogInset = chatLogInset
 
 local linkTypes = {
 	achievement = true,
@@ -768,7 +768,7 @@ local linkTypes = {
 
 
 local chatLog = CreateFrame("ScrollingMessageFrame", nil, chatLogInset)
-PM.chatLog = chatLog
+Telecom.chatLog = chatLog
 chatLog:SetPoint("TOPRIGHT", -6, -6)
 chatLog:SetPoint("BOTTOMLEFT", 6, 5)
 chatLog:SetMaxLines(256)
@@ -808,7 +808,7 @@ chatLog:SetOnScrollChangedCallback(function(self)
 	local atBottom = self:AtBottom()
 	self.scrollToBottom:SetShown(not atBottom)
 	-- if processing then return end
-	local thread = PM:GetSelectedThread()
+	local thread = Telecom:GetSelectedThread()
 	if atBottom then
 		thread.scroll = nil
 	else
@@ -857,7 +857,7 @@ fade:SetSmoothing("OUT")
 -- BN_WHISPER
 -- BN_WHISPER_INFORM
 
-function PM:UpdateColorByID(chatType, r, g, b)
+function Telecom:UpdateColorByID(chatType, r, g, b)
 	local function TransformColorByID(text, messageR, messageG, messageB, messageChatTypeID, messageAccessID, lineID)
 		if messageChatTypeID == chatType then
 			return true, r, g, b
@@ -867,13 +867,13 @@ function PM:UpdateColorByID(chatType, r, g, b)
 	chatLog:AdjustMessageColors(TransformColorByID)
 end
 
-function PM:UPDATE_CHAT_COLOR(chatType, r, g, b)
+function Telecom:UPDATE_CHAT_COLOR(chatType, r, g, b)
 	if not self.db.useDefaultColor[chatType] then return end
 	self:UpdateColorByID(GetChatTypeIndex(chatType), r, g, b)
 	self:UpdateColorByID(GetChatTypeIndex(chatType.."_INFORM"), r, g, b)
 end
 
-function PM:UpdateChatColor(chatType, r, g, b)
+function Telecom:UpdateChatColor(chatType, r, g, b)
 	local color = self.db.useDefaultColor[chatType] and ChatTypeInfo[chatType] or self.db.color[chatType]
 	self:UpdateColorByID(GetChatTypeIndex(chatType), color.r, color.g, color.b)
 	if not self.db.useDefaultColor[chatType] and self.db.separateOutgoingColor then
@@ -882,20 +882,20 @@ function PM:UpdateChatColor(chatType, r, g, b)
 	self:UpdateColorByID(GetChatTypeIndex(chatType.."_INFORM"), color.r, color.g, color.b)
 end
 
-function PM:Show()
+function Telecom:Show()
 	frame:Show()
 end
 
-function PM:UpdateThreadList()
+function Telecom:UpdateThreadList()
 	scrollFrame:update()
 end
 
-function PM:CreateScrollButtons()
+function Telecom:CreateScrollButtons()
 	scrollFrame:CreateButtons()
 end
 
 local function insert(target, chatType)
-	if not PM:IsThreadActive(target, chatType) then
+	if not Telecom:IsThreadActive(target, chatType) then
 		tinsert(threadListItems, {
 			target = target,
 			type = chatType,
@@ -918,7 +918,7 @@ local function addWoWFriend(index)
 	insert(name, "WHISPER")
 end
 
-function PM:UpdateThreads()
+function Telecom:UpdateThreads()
 	wipe(threadListItems)
 	
 	for i, thread in ipairs(self.db.activeThreads) do
@@ -961,7 +961,7 @@ function PM:UpdateThreads()
 		end
 	end
 	
-	local numActiveThreads = #PM.db.activeThreads
+	local numActiveThreads = #Telecom.db.activeThreads
 	
 	if (numActiveThreads > 0) and (#threadListItems > numActiveThreads) then
 		-- insert the separator item between the active threads and the "friends list"
@@ -977,7 +977,7 @@ local function printMessage(thread, messageIndex, addToTop)
 	local message1 = thread.messages[messageIndex]
 	local message2 = thread.messages[messageIndex + 1]
 	if not addToTop then
-		PM:PrintMessage(thread, message1, addToTop)
+		Telecom:PrintMessage(thread, message1, addToTop)
 	end
 	local time1 = date("*t", message1.timestamp)
 	local time2 = message2 and date("*t", message2.timestamp)
@@ -988,13 +988,13 @@ local function printMessage(thread, messageIndex, addToTop)
 			time1, time2 = time2, time1
 		end
 		if addToTop then
-			chatLog:BackFillMessage(PM:GetDateStamp(time1), 0.8, 0.8, 0.8)
+			chatLog:BackFillMessage(Telecom:GetDateStamp(time1), 0.8, 0.8, 0.8)
 			chatLog:BackFillMessage(" ")
-			chatLog:BackFillMessage(PM:GetDateStamp(time2), 0.8, 0.8, 0.8)
+			chatLog:BackFillMessage(Telecom:GetDateStamp(time2), 0.8, 0.8, 0.8)
 		else
-			chatLog:AddMessage(PM:GetDateStamp(time1), 0.8, 0.8, 0.8)
+			chatLog:AddMessage(Telecom:GetDateStamp(time1), 0.8, 0.8, 0.8)
 			chatLog:AddMessage(" ")
-			chatLog:AddMessage(PM:GetDateStamp(time2), 0.8, 0.8, 0.8)
+			chatLog:AddMessage(Telecom:GetDateStamp(time2), 0.8, 0.8, 0.8)
 		end
 	elseif not message1.active and (not message2 or message2.active) then
 		if addToTop then
@@ -1004,7 +1004,7 @@ local function printMessage(thread, messageIndex, addToTop)
 		end
 	end
 	if addToTop then
-		PM:PrintMessage(thread, message1, addToTop)
+		Telecom:PrintMessage(thread, message1, addToTop)
 	end
 end
 
@@ -1021,7 +1021,7 @@ local function printThrottler(self, elapsed)
 	end
 end
 
-function PM:SelectThread(target, chatType)
+function Telecom:SelectThread(target, chatType)
 	local thread = self:GetThread(target, chatType)
 	if thread == self:GetSelectedThread() then return end
 	self.selectedThread = thread
@@ -1035,7 +1035,7 @@ function PM:SelectThread(target, chatType)
 	editbox:SetAttribute("chatType", chatType)
 	editbox:SetAttribute("tellTarget", target)
 	self:RefreshThread(thread)
-	if PM.db.editboxTextPerThread then
+	if Telecom.db.editboxTextPerThread then
 		editbox:SetText(thread.editboxText or "")
 	end
 	menuButton.menu:Close()
@@ -1048,7 +1048,7 @@ function PM:SelectThread(target, chatType)
 	end
 end
 
-function PM:RefreshThread(thread)
+function Telecom:RefreshThread(thread)
 	if not thread then return end
 	chatLog:Clear()
 	local numMessages = #thread.messages
@@ -1072,7 +1072,7 @@ local darken = 0.2
 
 local lastMessageType
 
-function PM:PrintMessage(thread, message, addToTop)
+function Telecom:PrintMessage(thread, message, addToTop)
 	local messageType, messageText, timestamp, isActive, isUnread = message.messageType, message.text, message.timestamp, message.active, message.unread
 	local chatType = thread.type
 	local color = self.db.useDefaultColor[chatType] and ChatTypeInfo[chatType] or self.db.color[chatType]
@@ -1131,7 +1131,7 @@ function PM:PrintMessage(thread, message, addToTop)
 end
 
 
-function PM:UpdateInfo()
+function Telecom:UpdateInfo()
 	local selectedThread = self:GetSelectedThread()
 	local name, info, texture
 	infoPanel.icon:SetHeight(24)

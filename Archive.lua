@@ -1,9 +1,9 @@
-local _, PM = ...
+local _, Telecom = ...
 
 local selectedLog
 local selectedLogType
 
-local frame = CreateFrame("Frame", "PMArchiveFrame", UIParent, "BasicFrameTemplate")
+local frame = CreateFrame("Frame", "TelecomArchiveFrame", UIParent, "BasicFrameTemplate")
 frame.TitleText:SetText("Archive")
 frame:SetPoint("CENTER")
 frame:SetSize(440, 424)
@@ -26,16 +26,16 @@ end
 local sortedThreads = {}
 
 local function onClick(self, target, chatType)
-	PM:SelectArchive(target, chatType)
+	Telecom:SelectArchive(target, chatType)
 end
 
-local menu = PM:CreateDropdown("Frame", frame)
+local menu = Telecom:CreateDropdown("Frame", frame)
 menu:SetWidth(140)
 menu:SetPoint("TOPLEFT", 0, -29)
 menu:JustifyText("LEFT")
 menu.initialize = function(self)
 	wipe(sortedThreads)
-	for i, thread in ipairs(PM.db.threads) do
+	for i, thread in ipairs(Telecom.db.threads) do
 		if #thread.messages > 0 then
 			tinsert(sortedThreads, thread)
 		end
@@ -52,7 +52,7 @@ menu.initialize = function(self)
 	end
 end
 
-local archive = CreateFrame("ScrollFrame", "PMArchiveLog", inset)
+local archive = CreateFrame("ScrollFrame", "TelecomArchiveLog", inset)
 archive:SetPoint("TOPLEFT", 6, -6)
 archive:SetPoint("BOTTOMRIGHT", -30, 6)
 archive:SetScript("OnScrollRangeChanged", function(self, xrange, yrange)
@@ -71,7 +71,7 @@ archive:SetScript("OnVerticalScroll", function(self, offset)
 end)
 archive:SetScript("OnMouseWheel", ScrollFrameTemplate_OnMouseWheel)
 
-archive.ScrollBar = CreateFrame("Slider", "PMArchiveLogScrollBar", archive, "UIPanelScrollBarTrimTemplate")
+archive.ScrollBar = CreateFrame("Slider", "TelecomArchiveLogScrollBar", archive, "UIPanelScrollBarTrimTemplate")
 archive.ScrollBar:SetPoint("TOPRIGHT", inset, 0, -18)
 archive.ScrollBar:SetPoint("BOTTOMRIGHT", inset, 0, 16)
 
@@ -104,12 +104,12 @@ end)
 local function printLog()
 	local darken = 0.2
 	local color = ChatTypeInfo[selectedLogType]
-	local thread = PM:GetThread(selectedLog, selectedLogType)
+	local thread = Telecom:GetThread(selectedLog, selectedLogType)
 	
 	local target = selectedLog or UNKNOWN
 	if selectedLogType == "WHISPER" then
 		target = Ambiguate(target, "none")
-		if thread.targetID and PM.db.classColors then
+		if thread.targetID and Telecom.db.classColors then
 			local localizedClass, englishClass, localizedRace, englishRace = GetPlayerInfoByGUID(thread.targetID)
 			local color = englishClass and (CUSTOM_CLASS_COLORS or RAID_CLASS_COLORS)[englishClass]
 			if color then
@@ -137,12 +137,12 @@ local function printLog()
 			local nextMessage = thread.messages[i + 1]
 			local nextTime = nextMessage and date("*t", nextMessage.timestamp)
 			if nextMessage and nextMessage.messageType and (nextTime.yday ~= time.yday or nextTime.year ~= time.year) then
-				text = text..format("\n|cffdddddd%s\n\n%s|r", PM:GetDateStamp(time), PM:GetDateStamp(nextTime))
+				text = text..format("\n|cffdddddd%s\n\n%s|r", Telecom:GetDateStamp(time), Telecom:GetDateStamp(nextTime))
 			end
 		end
 	end
 	local t = date("*t", thread.messages[#thread.messages].timestamp)
-	text = text..format("\n|cffdddddd%s|r", PM:GetDateStamp(t))
+	text = text..format("\n|cffdddddd%s|r", Telecom:GetDateStamp(t))
 	archiveLog:SetText(strsub(text, 2))
 end
 
@@ -175,7 +175,7 @@ local function search(text)
 	end
 end
 
-local searchBox = PM:CreateEditbox(frame, true)
+local searchBox = Telecom:CreateEditbox(frame, true)
 searchBox:SetWidth(128)
 searchBox:SetPoint("TOPRIGHT", -16, -33)
 searchBox:HookScript("OnTextChanged", function(self, isUserInput)
@@ -201,7 +201,7 @@ local purgeOptions = {
 	{
 		text = "Purge archived messages only",
 		func = function(self)
-			local thread = PM:GetThread(selectedLog, selectedLogType)
+			local thread = Telecom:GetThread(selectedLog, selectedLogType)
 			local messages = thread.messages
 			for i = #messages, 1, -1 do
 				local message = messages[i]
@@ -209,8 +209,8 @@ local purgeOptions = {
 					tremove(messages, i)
 				end
 			end
-			if #messages == 0 and not PM:IsThreadActive(thread.target, thread.type) then
-				PM:DeleteThread(thread.target, thread.type)
+			if #messages == 0 and not Telecom:IsThreadActive(thread.target, thread.type) then
+				Telecom:DeleteThread(thread.target, thread.type)
 				archiveLog:SetText("")
 				menu:SetText(nil)
 			end
@@ -220,10 +220,10 @@ local purgeOptions = {
 	{
 		text = "Purge all messages",
 		func = function(self)
-			local thread = PM:GetThread(selectedLog, selectedLogType)
+			local thread = Telecom:GetThread(selectedLog, selectedLogType)
 			wipe(thread.messages)
-			if not PM:IsThreadActive(thread.target, thread.type) then
-				PM:DeleteThread(thread.target, thread.type)
+			if not Telecom:IsThreadActive(thread.target, thread.type) then
+				Telecom:DeleteThread(thread.target, thread.type)
 			end
 			archiveLog:SetText("")
 			menu:SetText(nil)
@@ -232,15 +232,15 @@ local purgeOptions = {
 	{
 		text = "Purge all messages and close thread",
 		func = function(self)
-			PM:CloseThread(selectedLog, selectedLogType)
-			PM:DeleteThread(selectedLog, selectedLogType)
+			Telecom:CloseThread(selectedLog, selectedLogType)
+			Telecom:DeleteThread(selectedLog, selectedLogType)
 			archiveLog:SetText("")
 			menu:SetText(nil)
 		end,
 	},
 }
 
-local purgeButton = PM:CreateButton(frame)
+local purgeButton = Telecom:CreateButton(frame)
 purgeButton:SetWidth(80)
 purgeButton:SetPoint("LEFT", menu, "RIGHT", -4, 2)
 purgeButton:SetText("Purge")
@@ -249,7 +249,7 @@ purgeButton:SetScript("OnClick", function(self)
 	self.menu:Toggle()
 end)
 
-purgeButton.menu = PM:CreateDropdown("Menu")
+purgeButton.menu = Telecom:CreateDropdown("Menu")
 purgeButton.menu.relativeTo = purgeButton
 purgeButton.menu.initialize = function(self)
 	for index = 1, #purgeOptions do
@@ -262,7 +262,7 @@ purgeButton.menu.initialize = function(self)
 	end
 end
 
-function PM:SelectArchive(target, chatType)
+function Telecom:SelectArchive(target, chatType)
 	selectedLog = target
 	selectedLogType = chatType
 	archive.doScrollToBottom = true
