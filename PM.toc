@@ -1,4 +1,4 @@
-## Interface: 90001
+## Interface: 100000
 ## Title: PM
 ## Version: @project-version@
 ## Notes: Managed private conversations.
