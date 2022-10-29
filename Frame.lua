@@ -360,7 +360,7 @@ local function addTooltipAccountInfo(gameAccountInfo)
 		GameTooltip:AddLine(client)
 		GameTooltip:AddLine(gameAccountInfo.characterName, color.r, color.g, color.b)
 		GameTooltip:AddLine(format(TOOLTIP_UNIT_LEVEL_RACE_CLASS, gameAccountInfo.characterLevel, gameAccountInfo.raceName, class))
-		GameTooltip:AddLine(gameAccountInfo.realmName)
+		GameTooltip:AddLine(gameAccountInfo.realmDisplayName)
 		GameTooltip:AddLine(gameAccountInfo.factionName)
 		GameTooltip:AddLine(gameAccountInfo.areaName)
 	elseif client ~= BNET_CLIENT_APP then
