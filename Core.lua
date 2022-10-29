@@ -8,7 +8,7 @@ local function getPresenceByTag(battleTagQuery)
 	if not battleTagQuery then return end
 	for i = 1, BNGetNumFriends() do
 		local accountInfo = C_BattleNet.GetFriendAccountInfo(i)
-		if accountInfo.battleTag == battleTagQuery then
+		if accountInfo and accountInfo.battleTag == battleTagQuery then
 			return accountInfo.accountName, accountInfo.bnetAccountID
 		end
 	end

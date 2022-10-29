@@ -6,7 +6,7 @@ local LSM_FontObjects = {}
 
 for i, font in ipairs(LSM:List("font")) do
 	LSM_FontObjects[font] = CreateFont("LibSharedMedia_Font_"..font)
-	LSM_FontObjects[font]:SetFont(LSM:Fetch("font", font), 10)
+	LSM_FontObjects[font]:SetFont(LSM:Fetch("font", font), 10, "")
 end
 
 local frame = PM:CreateOptionsFrame("PM")
@@ -14,7 +14,7 @@ local frame = PM:CreateOptionsFrame("PM")
 LSM.RegisterCallback(frame, "LibSharedMedia_Registered", function(event, mediaType, key)
 	if mediaType ~= "font" then return end
 	LSM_FontObjects[key] = CreateFont("LibSharedMedia_Font_"..key)
-	LSM_FontObjects[key]:SetFont(LSM:Fetch("font", key), 10)
+	LSM_FontObjects[key]:SetFont(LSM:Fetch("font", key), 10, "")
 end)
 
 LSM:Register("sound", "TellMessage", [[Sound\Interface\iTellMessage.ogg]])
@@ -33,7 +33,7 @@ optionsAppearance:CreateOptions({
 		tooltip = "Sets the font used by the chat log.",
 		key = "font",
 		func = function(self, font)
-			PM.chatLog:SetFont(LSM:Fetch("font", font), PM.db.fontSize)
+			PM.chatLog:SetFont(LSM:Fetch("font", font), PM.db.fontSize, "")
 		end,
 		menuList = function(self)
 			return LSM:List("font")
@@ -48,7 +48,7 @@ optionsAppearance:CreateOptions({
 		tooltip = "Sets the font size of the chat log.",
 		key = "fontSize",
 		func = function(self, value)
-			PM.chatLog:SetFont(LSM:Fetch("font", PM.db.font), value)
+			PM.chatLog:SetFont(LSM:Fetch("font", PM.db.font), value, "")
 		end,
 		min = 8,
 		max = 32,
