@@ -19,9 +19,8 @@ end)
 
 LSM:Register("sound", "TellMessage", [[Sound\Interface\iTellMessage.ogg]])
 
-SlashCmdList["Telecom"] = function(msg)
-	InterfaceOptionsFrame_OpenToCategory(frame)
-	InterfaceOptionsFrame_OpenToCategory(frame)
+SlashCmdList["TELECOM"] = function(msg)
+	frame:Open()
 end
 SLASH_TELECOM1 = "/telecom"
 
