@@ -4,6 +4,7 @@
 ## Notes: Managed private conversations.
 ## IconTexture:
 ## Author: Lombra
+## X-Curse-Project-ID: 79837
 
 ## SavedVariables: TelecomDB
 
