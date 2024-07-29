@@ -2,6 +2,7 @@
 ## Title: Telecom
 ## Version: @project-version@
 ## Notes: Managed private conversations.
+## IconTexture:
 ## Author: Lombra
 
 ## SavedVariables: TelecomDB
