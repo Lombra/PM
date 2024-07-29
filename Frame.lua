@@ -114,7 +114,7 @@ local function onEnter(self)
 end
 
 local function onLeave(self)
-	if Telecom:IsThreadActive(self.target, self.type) and GetMouseFocus() ~= self.close then
+	if Telecom:IsThreadActive(self.target, self.type) and not self.close:IsMouseMotionFocus() then
 		self.close:Hide()
 		local thread = Telecom:GetThread(self.target, self.type)
 		if not self.selected then
@@ -138,7 +138,7 @@ local closeScripts = {
 	end,
 	OnLeave = function(self)
 		self:SetAlpha(0.5)
-		if GetMouseFocus() ~= self.parent then
+		if not self.parent:IsMouseMotionFocus() then
 			onLeave(self.parent)
 		end
 	end,
@@ -260,7 +260,7 @@ scrollFrame.updateButton = function(button, index)
 	
 	button.target = object.target
 	button.type = object.type
-	if GetMouseFocus() == button then
+	if button:IsMouseMotionFocus() then
 		if Telecom:IsThreadActive(object.target, object.type) then
 			button.icon:Hide()
 			button.text:SetPoint("RIGHT", button.icon, "LEFT", -2, 0)
