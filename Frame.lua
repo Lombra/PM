@@ -906,7 +906,9 @@ end
 
 local function addBNetFriend(index)
 	local accountInfo = C_BattleNet.GetFriendAccountInfo(index)
-	insert(accountInfo.accountName, "BN_WHISPER")
+	if accountInfo then
+		insert(accountInfo.accountName, "BN_WHISPER")
+	end
 end
 
 local function addWoWFriend(index)
