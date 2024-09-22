@@ -1136,7 +1136,8 @@ end
 
 function Telecom:UpdateInfo()
 	local selectedThread = self:GetSelectedThread()
-	local name, info, texture
+	local name, info
+	infoPanel.icon:SetTexture(nil)
 	infoPanel.icon:SetHeight(24)
 	if selectedThread.type == "BN_WHISPER" then
 		if not selectedThread.target then
@@ -1173,7 +1174,7 @@ function Telecom:UpdateInfo()
 						info = gameAccountInfo.richPresence
 					end
 				end
-				texture = BNet_GetBattlenetClientAtlas(client)
+				C_Texture.SetTitleIconTexture(infoPanel.icon, client, Enum.TitleIconVersion.Medium)
 			end
 		end
 	else
@@ -1184,8 +1185,7 @@ function Telecom:UpdateInfo()
 		local isFriend, connected, isAFK, isDND, level, class, area = self:GetFriendInfo(target)
 		if isFriend and connected and level and level > 0 then
 			info = format("Level %d %s - %s", level, class, area)
-			infoPanel.icon:SetTexCoord(unpack(CLASS_ICON_TCOORDS[reverseclassnames[class]]))
-			texture = [[Interface\Glues\CharacterCreate\UI-CharacterCreate-Classes]]
+			infoPanel.icon:SetAtlas(GetClassAtlas(reverseclassnames[class]))
 		end
 		-- Unit* API, in case they're in the group
 		local level = UnitLevel(target)
@@ -1203,17 +1203,15 @@ function Telecom:UpdateInfo()
 		if not info and selectedThread.targetID then
 			local localizedClass, englishClass, localizedRace, englishRace = GetPlayerInfoByGUID(selectedThread.targetID)
 			if englishClass then
-				infoPanel.icon:SetTexCoord(unpack(CLASS_ICON_TCOORDS[englishClass]))
-				texture = [[Interface\Glues\CharacterCreate\UI-CharacterCreate-Classes]]
+				infoPanel.icon:SetAtlas(GetClassAtlas(englishClass))
 				info = localizedClass
 			end
 		elseif selectedThread.isGM then
 			infoPanel.icon:SetHeight(12)
 			infoPanel.icon:SetTexCoord(0, 1, 0, 1)
-			texture = [[Interface\ChatFrame\UI-ChatIcon-Blizz]]
+			infoPanel.icon:SetTexture([[Interface\ChatFrame\UI-ChatIcon-Blizz]])
 		end
 	end
-	infoPanel.icon:SetTexture(texture)
 	infoPanel.target:SetText(name or Ambiguate(selectedThread.target, "none"))
 	infoPanel.toon:SetText(info)
 end
